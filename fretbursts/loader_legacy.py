@@ -152,7 +152,7 @@ def assert_valid_photon_hdf5(h5file):
         stored_value = h5file.root._v_attrs[attr]
         if stored_value != value:
             msg += ' * Error: %s != %s\n' % (stored_value, value)
-    if msg is not '':
+    if msg != '':
         h5file.close()
         msg = 'Not a valid Photon-HDF5 file. \n' + msg
         raise IOError(msg)

@@ -788,7 +788,7 @@ def join_data(d_list, gap=0):
     # Set the bursts fields by concatenation along axis = 0
     for name in Data.burst_fields:
         if name in new_d:
-            empty = Bursts.empty() if name is 'mburst' else np.array([])
+            empty = Bursts.empty() if name == 'mburst' else np.array([])
             new_d.add(**{name: [empty]*nch})
             concatenate = Bursts.merge if name == 'mburst' else np.concatenate
 

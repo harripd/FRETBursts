@@ -40,7 +40,7 @@ from itertools import cycle
 # Numeric imports
 import numpy as np
 from numpy import arange, r_
-from matplotlib.mlab import normpdf
+from scipy.stats import norm as norm
 from scipy.stats import erlang
 from scipy.interpolate import UnivariateSpline
 
@@ -50,6 +50,7 @@ from matplotlib.pyplot import (plot, hist, xlabel, ylabel, grid, title, legend,
                                gca, gcf)
 from matplotlib.patches import Rectangle, Ellipse
 from matplotlib.collections import PatchCollection, PolyCollection
+from matplotlib.offsetbox import AnchoredText
 import seaborn as sns
 
 # Local imports
@@ -332,7 +333,7 @@ def _plot_rate_th(d, i, F, ph_sel, invert=False, scale=1,
     rate_th_style_ = dict(plot_style_)
     rate_th_style_.update(linestyle='--', label='auto')
     rate_th_style_.update(_normalize_kwargs(rate_th_style, kind='line2d'))
-    if rate_th_style_['label'] is 'auto':
+    if rate_th_style_['label'] == 'auto':
         rate_th_style_['label'] = 'bg_rate*%d %s' % \
                                   (F, plot_style_['label'])
     x_rate = np.hstack(d.Ph_p[i]) * d.clk_p
@@ -1018,8 +1019,8 @@ def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
                 a2 = (1-a1)
             elif d.fit_E_res.shape[1] == 6:
                 m1, s1, a1, m2, s2, a2 = d.fit_E_res[i, :]
-            y1 = a1*normpdf(x, m1, s1)
-            y2 = a2*normpdf(x, m2, s2)
+            y1 = a1*norm.pdf(x, m1, s1)
+            y2 = a2*norm.pdf(x, m2, s2)
             ax2.plot(x, scale*y1, ls='--', lw=lw, alpha=alpha, color=color)
             ax2.plot(x, scale*y2, ls='--', lw=lw, alpha=alpha, color=color)
         if fillcolor is None:
@@ -1592,7 +1593,7 @@ def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
         fit_style_ = dict(hist['plot_style_'])
         fit_style_.update(linestyle='-', marker='', label='auto')
         fit_style_.update(_normalize_kwargs(fit_style, kind='line2d'))
-        if fit_style_['label'] is 'auto':
+        if fit_style_['label'] == 'auto':
             plt_label = hist['plot_style_'].get('label', None)
             label = str(ph_sel) if plt_label is None else plt_label
             fit_style_['label'] = '%s, %.2f kcps' % (label, bg_rate * 1e-3)
@@ -2289,12 +2290,17 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
         jplot = g.plot_joint(sns.kdeplot, **joint_kws_)
+    anno_str = ''
+    for mburst in d.mburst:
+        anno_str = anno_str + f'# Bursts: {mburst.size}\n'
+    anno_box = AnchoredText(anno_str,loc='upper right',frameon=False)
+    plt.gca().add_artist(anno_box)
     g.ax_joint.set_xlim(-0.19, 1.19)
     g.ax_joint.set_xlim(-0.19, 1.19)
     g.plot_marginals(_hist_bursts_marg, dx=d, i=i, E_name=E_name, S_name=S_name,
                      **marginal_kws_)
-    g.annotate(lambda x, y: x.size, stat='# Bursts',
-               template='{stat}: {val}', frameon=False)
+#    (lambda x, y: x.size, stat='# Bursts',
+#               template='{stat}: {val}', frameon=False)
     colorbar = kind.startswith('hex')
     _alex_plot_style(g, colorbar=colorbar)
     if rightside_text:
