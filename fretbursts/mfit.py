@@ -456,14 +456,15 @@ class MultiFitter(FitterBase):
             self.histogram()
 
         data_list = self.hist_pdf if pdf else self.hist_counts
-        self.params = pd.DataFrame(index=range(self.ndata),
-                                   columns=sorted(self.model.param_names))
         self.fit_res = []
         #init_params = copy.deepcopy(self.model.params)
         for i, data in enumerate(data_list):
             self.fit_res.append(
                 self.model.fit(data, x=self.hist_axis, **fit_kwargs))
-            self.params.iloc[i] = pd.Series(self.fit_res[-1].values)
+        fit_res = [val.values for val in self.fit_res]
+        self.params = pd.DataFrame(fit_res)
+        self.params = self.params[sorted(self.params.columns.tolist())]
+        
 
     def calc_kde(self, bandwidth=0.03):
         """Compute the list of kde functions and save it in `.kde`.

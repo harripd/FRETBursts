@@ -199,7 +199,7 @@ def iter_bursts_ph(ph_data, bursts, mask=None, compact=False,
         yield ph
 
 def bursts_ph_list(ph_data, bursts, mask=None):
-    """Returna list of ph-data for each burst.
+    """Return a list of ph-data for each burst.
 
     ph_data can be either the timestamp array on which the burst search
     has been performed or any other array with same size (boolean array,
