@@ -245,7 +245,7 @@ def fit_varying_min_delta_ph(d, min_delta_ph_list, bg_fit_fun=exp_fit,
                     break   # Skip remaining values in min_delta_ph_list
     return BG, BG_err
 
-
+# todo: make work with new Ph_sel definitions
 def fit_var_tail_us(d, Tail_min_us_list, t_max_s,
                     bg_fit_fun=exp_fit, ph_sel=Ph_sel('all'), **kwargs):
     """
@@ -269,6 +269,7 @@ def fit_var_tail_us(d, Tail_min_us_list, t_max_s,
 
     Ph_times = []
     for ph, a_em in zip(ph_times_m_slice, A_em_slice):
+        # TODO: make work with new Ph_sel definitions
         if ph_sel == Ph_sel(Dex='Dem'):
             Ph_times.append(ph[-a_em])
         elif ph_sel == Ph_sel(Dex='Aem'):

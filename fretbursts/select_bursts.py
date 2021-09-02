@@ -148,7 +148,7 @@ def naa(d, ich=0, th1=20, th2=np.inf, gamma=1., beta=1., donor_ref=True,
         - :meth:`fretbursts.burstlib.Data.burst_sizes_pax_ich`.
     """
     assert th1 <= th2, 'th1 (%.2f) must be <= of th2 (%.2f)' % (th1, th2)
-    aex_dex_ratio = d._aex_dex_ratio
+    aex_dex_ratio = d._aex_dex_ratio[ich]
     naa_term = d.naa[ich].copy()
     if 'PAX' in d.meas_type and naa_aexonly:
         naa_term -= aex_dex_ratio * d.nar[ich]
@@ -373,7 +373,7 @@ def nt_bg(d, ich=0, F=5):
 ## Selection on burst size vs BG (probabilistic)
 def na_bg_p(d, ich=0, P=0.05, F=1.):
     """Select bursts w/ AD signal using P{F*BG>=na} < P."""
-    accept_ch_bg_rate = d.bg_mean(Ph_sel(Dex='Aem'))[ich]
+    accept_ch_bg_rate = d.bg_mean(Ph_sel('DexAem'))[ich]
     bursts_width = _clk_to_s(d.mburst[ich].width)
     max_num_bg_ph = stats.poisson(F*accept_ch_bg_rate*bursts_width).isf(P)
     #print("Min num. ph = ",  max_num_bg_ph)
@@ -382,7 +382,7 @@ def na_bg_p(d, ich=0, P=0.05, F=1.):
 
 def nd_bg_p(d, ich=0, P=0.05, F=1.):
     """Select bursts w/ DD signal using P{F*BG>=nd} < P."""
-    donor_ch_bg_rate = d.bg_mean(Ph_sel(Dex='Dem'))[ich]
+    donor_ch_bg_rate = d.bg_mean(Ph_sel('DexDem'))[ich]
     bursts_width = _clk_to_s(d.mburst[ich].width)
     max_num_bg_ph = stats.poisson(F*donor_ch_bg_rate*bursts_width).isf(P)
     #print("Min num. ph = ", max_num_bg_ph)
@@ -391,7 +391,7 @@ def nd_bg_p(d, ich=0, P=0.05, F=1.):
 
 def naa_bg_p(d, ich=0, P=0.05, F=1.):
     """Select bursts w/ AA signal using P{F*BG>=naa} < P."""
-    A_em_ex_bg_rate = d.bg_mean(Ph_sel(Aex='Aem'))[ich]
+    A_em_ex_bg_rate = d.bg_mean(Ph_sel('AexAem'))[ich]
     bursts_width = _clk_to_s(d.mburst[ich].width)
     max_num_bg_ph = stats.poisson(F*A_em_ex_bg_rate*bursts_width).isf(P)
     #print("Min num. ph = ", max_num_bg_ph)

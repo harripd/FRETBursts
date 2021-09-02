@@ -206,10 +206,10 @@ def _load_bg_data(store, base_name, ph_streams):
     min_ph_delays = store.get_node(group_name, 'min_ph_delays_us')[:]
     BG_data = {}
     for ph_sel in ph_streams:
-        BG_data[ph_sel] = store.get_node(group_name, str(ph_sel))[:]
+        BG_data[ph_sel.__str__()] = store.get_node(group_name, str(ph_sel))[:]
     BG_data_e = {}
     for ph_sel in ph_streams:
-        BG_data_e[ph_sel] = store.get_node(group_name, str(ph_sel) + '_err')[:]
+        BG_data_e[ph_sel.__str__()] = store.get_node(group_name, str(ph_sel) + '_err')[:]
     store.close()
     store = pd.HDFStore(store_name)
     best_bg = store[base_name + 'best_bg']
@@ -318,19 +318,19 @@ def calc_bg_brute(dx, min_ph_delay_list=None, return_all=False,
     for ph_sel in dx.ph_streams:
         # Compute BG and error for all ch, periods and thresholds
         # Shape: (nch, nperiods, len(thresholds))
-        BG_data[ph_sel], BG_data_e[ph_sel] = bg.fit_varying_min_delta_ph(
+        BG_data[ph_sel.__str__()], BG_data_e[ph_sel.__str__()] = bg.fit_varying_min_delta_ph(
             dx, min_ph_delay_list, bg_fit_fun=bg.exp_fit, ph_sel=ph_sel,
             error_metrics=error_metrics)
 
         # Compute the best Th and BG estimate for all ch and periods
         for ich in range(dx.nch):
             for period in range(dx.nperiods):
-                b = BG_data_e[ph_sel][ich, period, :]
+                b = BG_data_e[ph_sel.__str__()][ich, period, :]
                 i_best_th = b[-np.isnan(b)].argmin()
                 best_th.loc[(ich, str(ph_sel)), period] = \
                     min_ph_delay_list[i_best_th]
                 best_bg.loc[(ich, str(ph_sel)), period] = \
-                    BG_data[ph_sel][ich, period, i_best_th]
+                    BG_data[ph_sel.__str__()][ich, period, i_best_th]
     if return_all:
         return best_th, best_bg, BG_data, BG_data_e, min_ph_delay_list
     else:
@@ -523,8 +523,8 @@ def bursts_fitter(dx, burst_data='E', save_fitter=True,
     Returns:
         The `mfit.MultiFitter` object with the specified burst-size weights.
     """
-    assert burst_data in dx
-    fitter = mfit.MultiFitter(dx[burst_data], skip_ch=skip_ch)
+    assert hasattr(dx,burst_data)
+    fitter = mfit.MultiFitter(getattr(dx,burst_data), skip_ch=skip_ch)
     if weights is None or _is_list_of_arrays(weights):
         # If no weights or precomputed weights
         fitter.weights = weights
@@ -556,14 +556,14 @@ def _get_bg_distrib_erlang(d, ich=0, m=10, ph_sel=Ph_sel('all'),
                            period=(0, -1)):
     """Return a frozen (scipy) erlang distrib. with rate equal to the bg rate.
     """
-    assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
+    assert ph_sel in [Ph_sel('all'), Ph_sel('DexDem'), Ph_sel('DexAem')]
 
     # Compute the BG distribution
     if ph_sel == Ph_sel('all'):
         bg_ph = d.bg_dd[ich] + d.bg_ad[ich]
-    elif ph_sel == Ph_sel(Dex='Dem'):
+    elif ph_sel == Ph_sel('DexDem'):
         bg_ph = d.bg_dd[ich]
-    elif ph_sel == Ph_sel(Dex='Aem'):
+    elif ph_sel == Ph_sel('DexAem'):
         bg_ph = d.bg_ad[ich]
 
     rate_ch_kcps = bg_ph[period[0]:period[1]+1].mean()/1e3  # bg rate in kcps
@@ -635,7 +635,7 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
           Erlang distribution fitted to the histogram for
           bin_x > bg_mean*bg_F. Returned only if `bg_fit` is True.
     """
-    assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
+    assert ph_sel in [Ph_sel('all'), Ph_sel('DexDem'), Ph_sel('DexAem')]
     if np.size(period) == 1:
         period = (period, period)
     periods = slice(d.Lim[ich][period[0]][0], d.Lim[ich][period[1]][1] + 1)
@@ -645,12 +645,12 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
         ph = d.ph_times_m[ich][periods]
         if bursts:
             phb = ph[d.ph_in_burst[ich][periods]]
-    elif ph_sel == Ph_sel(Dex='Dem'):
+    elif ph_sel == Ph_sel('DexDem'):
         donor_ph_period = -d.A_em[ich][periods]
         ph = d.ph_times_m[ich][periods][donor_ph_period]
         if bursts:
             phb = ph[d.ph_in_burst[ich][periods][donor_ph_period]]
-    elif ph_sel == Ph_sel(Dex='Aem'):
+    elif ph_sel == Ph_sel('DexAem'):
         accept_ph_period = d.A_em[ich][periods]
         ph = d.ph_times_m[ich][periods][accept_ph_period]
         if bursts:
@@ -778,9 +778,12 @@ def join_data(d_list, gap=0):
 
     nch = d_list[0].nch
     bg_time_s = d_list[0].bg_time_s
+    stream_map = d_list[0]._stream_map
     for d in d_list:
         assert d.nch == nch
         assert d.bg_time_s == bg_time_s
+        for orig, stream in zip(stream_map,d._stream_map):
+            assert orig == stream
 
     new_d = Data(**d_list[0])
     new_d.delete('ph_times_m')
@@ -855,8 +858,8 @@ def join_data(d_list, gap=0):
 
 
 def burst_search_and_gate(dx, F=6, m=10, min_rate_cps=None, c=-1,
-                          ph_sel1=Ph_sel(Dex='DAem'),
-                          ph_sel2=Ph_sel(Aex='Aem'), compact=False, mute=False):
+                          ph_sel1=Ph_sel('DexDAem'),
+                          ph_sel2=Ph_sel('AexAem'), compact=False, mute=False):
     """Return a Data object containing bursts obtained by and-gate burst-search.
 
     The and-gate burst search is a composition of 2 burst searches performed
@@ -1012,8 +1015,8 @@ def asymmetry(dx, ich=0, func=np.mean, dropnan=True):
     Returns:
         An arrays of photon timestamps (one array per burst).
     """
-    stats_d = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel(Dex='Dem'))
-    stats_a = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel(Dex='Aem'))
+    stats_d = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel('DexDem'))
+    stats_a = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel('DexAem'))
     burst_asym = (stats_d - stats_a) * dx.clk_p * 1e3
     if dropnan:
         burst_asym = burst_asym[-np.isnan(burst_asym)]
