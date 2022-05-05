@@ -1065,11 +1065,11 @@ class Data(DataContainer):
 
     @property
     def _D_ON_multich(self):
-        return self._get_tuple_multich('alt_ON')
+        return (ich[0] for ich in self._get_tuple_multich('alt_ON'))
 
     @property
     def _A_ON_multich(self):
-        return self._get_tuple_multich('alt_ON')
+        return (ich[1] for ich in self._get_tuple_multich('alt_ON'))
 
     @property
     def _det_donor_accept_multich(self):
