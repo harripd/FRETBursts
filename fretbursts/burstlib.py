@@ -27,6 +27,7 @@ import numpy as np
 import copy
 from numpy import zeros, size, r_
 import scipy.stats as SS
+import warnings
 
 from .utils.misc import pprint, clk_to_s, deprecate
 from .poisson_threshold import find_optimal_T_bga
@@ -510,37 +511,170 @@ def _stream_enum(stream_dict):
     ph_sel_dict = {i:Ph_sel(sel) for i, sel in zip(all_streams,ph_sel_list)}
     return ph_sel_dict
 
-class DataContainer(dict):
-    """
-    Generic class for storing data.
+def make_immutable(value):
+    val_type = type(value)
+    if val_type == list:
+        new_value = list()
+        for i, val in enumerate(value):
+            new_value.append(make_immutable(val))
+        new_value = tuple(new_value)
+    elif val_type == np.ndarray:
+        new_value = value
+        new_value.setflags(write=False)
+    elif val_type == dict:
+        new_value = imdict(**value)
+    else:
+        new_value = value
+    return new_value
 
-    It's a dictionary in which each key is also an attribute d['nt'] or d.nt.
-    """
+def make_mutable(value):
+    val_type = type(value)
+    if val_type == tuple:
+        new_value = list()
+        for val in value:
+            new_value.append(make_mutable(val))
+    elif val_type == np.ndarray:
+        new_value = value
+        new_value.setflags(write=True)
+    elif val_type == imdict:
+        new_value = dict()
+        for key, val in value.items():
+            new_value[key] = make_mutable(val)
+    else:
+        new_value = value
+    return new_value
+
+class imdict(dict):
     def __init__(self, **kwargs):
-        dict.__init__(self, **kwargs)
-        for k in self:
-            dict.__setattr__(self, k, self[k])
+        for key, value in kwargs.items():
+            super().__setitem__(key, make_immutable(value))
+    def __setitem__(self, key, value):
+        raise AttributeError("DataDict does not support assignment")
+    def __setattr__(self, key, value):
+        raise AttributeError("DataDict does not support assignment")
+    def __getattr__(self, key):
+        return self[key]
+    def __dict__(self):
+        return {key:value for key, value in self.items()}
+    def update(self, *args, **kwargs):
+        raise AttributeError("update disabled for imdict")
+    def pop(self, *args):
+        raise AttributeError("pop disabled for imdict")
+    def popitem(self):
+        raise AttributeError("popitem disabled for imdict")
+    def __copy__(self):
+        return imdict(**copy.copy(dict(self)))
+    def __deepcopy__(self, memo={}):
+        return imdict(**copy.deepcopy(dict(self)))
 
-    def add(self, **kwargs):
-        """Adds or updates elements (attributes and/or dict entries). """
-        self.update(**kwargs)
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+class DataContainer:
+    def __init__(self, **kwargs):
+        super().__setattr__("_mutable", dict())
+        for key, value in kwargs.items():
+            super().__setattr__(key, value)
+            self._mutable[key] = True
+    
+    def __setattr__(self, key, value):
+        if key in self._mutable:
+            if self._mutable[key]:
+                super().__setattr__(key, value)
+            else:
+                raise KeyError(f"{key} is immutable")
+        else:
+            super().__setattr__(key, value)
+            self._mutable[key] = True
+    
+    def __getitem__(self, key):
+        return getattr(self, key)
+                       
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+    
+    def __dict__(self):
+        return {key:getattr(self, key) for key in self._mutable.keys()}
+    
+    def __delattr__(self, key):
+        if key not in self._mutable:
+            raise KeyError(f"{key} is not an attribute of this DataContainer")
+        super().__delattr__(key)
+        self._mutable.pop(key)
+    
+    def __iter__(self):
+        for field in self._mutable.keys():
+            yield field, getattr(self, field)
+            
+    def __contains__(self, key):
+        return key in self._mutable
+    
+    def __copy__(self):
+        new = DataContainer()
+        for key, mut in self._mutable.items():
+            new.add(**{key:getattr(self, key)}, mutable=mut)
+        return new
+            
+    def add(self, mutable=True, **kwargs):
+        for key in kwargs.keys():
+            if key in self._mutable and not self._mutable[key]: 
+                raise KeyError(f"{key} already exists in this DataContainer")
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            self._mutable[key] = bool(mutable)
+    
+    def delete(self, *args, warning=True):
+        for key in args:
+            if key not in self._mutable:
+                if warning:
+                    print(f'Warning: {key} not in Container')
+            else:
+                super().__delattr__(key)
+                self._mutable.pop(key)
+    
+    def set_immutable(self, key):
+        if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
+        self._mutable[key] = False
+        super().__setattr__(key, make_immutable(getattr(self,key)))
+    
+    def set_mutable(self, key):
+        if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
+        self._mutable[key] = True
+        super().__setattr__(key, make_mutable(getattr(self,key)))
+        
+    def __repr__(self):
+        ret = ""
+        for key in self._mutable.keys():
+            ret += f"{key}: {getattr(self, key)}\n"
+        return ret
 
-    def delete(self, *args, **kwargs):
-        """Delete an element (attribute and/or dict entry). """
-        warning = kwargs.get('warning', True)
-        for name in args:
-            try:
-                self.pop(name)
-            except KeyError:
-                if warning:
-                    print(' WARNING: Name %s not found (dict).' % name)
-            try:
-                delattr(self, name)
-            except AttributeError:
-                if warning:
-                    print(' WARNING: Name %s not found (attr).' % name)
+# class DataContainer(dict):
+#     """
+#     Generic class for storing data.
+#     It's a dictionary in which each key is also an attribute d['nt'] or d.nt.
+#     """
+#     def __init__(self, **kwargs):
+#         dict.__init__(self, **kwargs)
+#         for k in self:
+#             dict.__setattr__(self, k, self[k])
+
+#     def add(self, **kwargs):
+#         """Adds or updates elements (attributes and/or dict entries). """
+#         self.update(**kwargs)
+#         for k, v in kwargs.items():
+#             setattr(self, k, v)
+
+#     def delete(self, *args, **kwargs):
+#         """Delete an element (attribute and/or dict entry). """
+#         warning = kwargs.get('warning', True)
+#         for name in args:
+#             try:
+#                 self.pop(name)
+#             except KeyError:
+#                 if warning:
+#                     print(' WARNING: Name %s not found (dict).' % name)
+#             try:
+#                 delattr(self, name)
+#             except AttributeError:
+#                 if warning:
+#                     print(' WARNING: Name %s not found (attr).' % name)
 
 
 class Data(DataContainer):
@@ -682,7 +816,8 @@ class Data(DataContainer):
     # Attribute names containing per-photon data.
     # Each attribute is a list (1 element per ch) of arrays (1 element
     # per photon).
-    ph_fields = ['ph_times_m', 'nanotimes', 'particles', 'det_m']
+    ph_fields = ['ph_times_m', 'ph_times_t', 'nanotimes', 'nanotimes_t', 
+                 'particles', 'particles_t', 'det_m', 'det_t']
 
     # Attribute names containing background data.
     # The attribute `bg` is a dict with photon-selections as keys and
@@ -827,7 +962,7 @@ class Data(DataContainer):
         """Copy data in a new object. All arrays copied except for ph_times_m
         """
         pprint('Deep copy executed.\n', mute)
-        new_d = Data(**self)  # this make a shallow copy (like a pointer)
+        new_d = Data(**dict(self))  # this make a shallow copy (like a pointer)
 
         # Deep copy (not just reference) or array data
         for field in self.burst_fields + self.bg_fields:
@@ -1065,11 +1200,11 @@ class Data(DataContainer):
 
     @property
     def _D_ON_multich(self):
-        return (ich[0] for ich in self._get_tuple_multich('alt_ON'))
+        return tuple(ich[0] for ich in self._get_tuple_multich('alt_ON'))
 
     @property
     def _A_ON_multich(self):
-        return (ich[1] for ich in self._get_tuple_multich('alt_ON'))
+        return tuple(ich[1] for ich in self._get_tuple_multich('alt_ON'))
 
     @property
     def _det_donor_accept_multich(self):
@@ -1378,7 +1513,7 @@ class Data(DataContainer):
         t1_clk, t2_clk = int(time_s1 / self.clk_p), int(time_s2 / self.clk_p)
         masks = [(ph >= t1_clk) * (ph < t2_clk) for ph in self.iter_ph_times()]
 
-        new_d = Data(**self)
+        new_d = Data(**dict(self))
         for name in self.ph_fields:
             if name in self:
                 new_d[name] = [a[mask] for a, mask in zip(self[name], masks)]
@@ -1419,7 +1554,7 @@ class Data(DataContainer):
         """
         if skip_ch is None:
             skip_ch = []
-        dc = Data(**self)
+        dc = Data(**dict(self))
         mch_bursts = self.mburst
         mch_bursts = [bursts for i, bursts in enumerate(mch_bursts)
                       if i not in skip_ch]
@@ -1538,14 +1673,14 @@ class Data(DataContainer):
     @property
     def time_max(self):
         """The last recorded time in seconds."""
-        if not hasattr(self, '_time_max'):
+        if not hasattr(self, "_time_max"):
             self._time_max = self._time_reduce(last=True, func=max)
         return self._time_max
 
     @property
     def time_min(self):
         """The first recorded time in seconds."""
-        if not hasattr(self, '_time_min'):
+        if not hasattr(self, "_time_min"):
             self._time_min = self._time_reduce(last=False, func=min)
         return self._time_min
 
@@ -1556,13 +1691,10 @@ class Data(DataContainer):
 
         # Get either ph_times_m or ph_times_t
         ph_times = None
-        for ph_times_name in ['ph_times_m', 'ph_times_t']:
-            try:
-                ph_times = self[ph_times_name]
-            except KeyError:
-                pass
-            else:
-                break
+        if hasattr(self, "ph_times_m"):
+            ph_times = self.ph_times_m
+        elif hasattr(self, "ph_times_t"):
+            ph_times = self.ph_times_t
 
         if ph_times is not None:
             # This works with both numpy arrays and pytables arrays
@@ -2560,7 +2692,7 @@ class Data(DataContainer):
         if ms < 0:
             return self
         mburst = mch_fuse_bursts(self.mburst, ms=ms, clk_p=self.clk_p)
-        new_d = Data(**self)
+        new_d = Data(**dict(self))
         # TODO: check if reduced selections make sense
         # for k in ['E', 'S', 'nd', 'na', 'naa', 'nda', 'nar', 'nt', 'lsb', 'bp']:
         for k in ['E', 'S', 'n_ph', 'lsb', 'bp']:
@@ -2701,7 +2833,7 @@ class Data(DataContainer):
             :meth:`Data.select_bursts`, :meth:`Data.select_mask`
         """
         # Attributes of ds point to the same objects of self
-        ds = Data(**self)
+        ds = Data(**dict(self))
 
         ##Copy the per-burst fields that must be filtered
         used_fields = [field for field in Data.burst_fields if field in self]
@@ -2747,8 +2879,9 @@ class Data(DataContainer):
                 continue  # if no bursts skip this ch
             self.n_ph[ich] -= self.bg_expand(ich, width=False)
             if 'PAX' in self.meas_type:
-                raise NotImplementedError("PAX measurements no longer implemented, use previous version of FRETBursts")
-                # self.nt[ich] += self.nda[ich]
+                warnings.warn("PAX support is experimental in this version of FRETBursts")
+                # raise NotImplementedError("PAX measurements no longer implemented, use previous version of FRETBursts")
+                self.nt[ich] += self.nda[ich]
         
     def leakage_correction(self, mute=False):
         """Apply leakage correction to burst sizes (nd, na,...)

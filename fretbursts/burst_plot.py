@@ -897,8 +897,8 @@ def hist_width(d, i=0, bins=(0, 10, 0.025), ax=None, pdf=True, weights=None,
 
     _hist_burst_taildist(burst_widths, bins, pdf, weights=weights, vline=vline,
                          yscale=yscale, color=color, plot_style=plot_style)
-    plt.xlabel('Burst width (ms)')
-    plt.xlim(xmin=0)
+    ax.set_xlabel('Burst width (ms)')
+    ax.set_xlim(xmin=0)
 
 
 def hist_brightness(d, i=0, bins=(0, 60, 1), ax=None, pdf=True, weights=None,
@@ -2024,7 +2024,7 @@ def hist_mdelays(d, i=0, m=10, ax=None, bins_s=(0, 10, 0.02), period=0,
                               y=mdelays_hist_y[burst_domain])
 
     ax.title("I = %.1f %%" % (burst_integral*100), fontsize='small')
-    #text(0.8,0.8,"I = %.1f %%" % (integr*100), transform = gca().transAxes)
+    #text(0.8,0.8,"I = %.1f %%" % (integr*100), transform = plt.gca().transAxes)
 
     ## MDelays plot
     ax.plot(bin_x, mdelays_pdf_y, lw=2, color=blue, alpha=0.5,

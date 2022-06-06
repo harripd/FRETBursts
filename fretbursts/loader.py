@@ -1000,6 +1000,8 @@ def alex_apply_period(d, delete_ph_t=True):
     ph_data_size = d.ph_data_sizes.sum()
     msg = ('# Total photons (after ALEX selection):  {:12,}\n'.format(ph_data_size))
     phot_count = {ph_str:0 for ph_str in d.ph_streams_str}
+    d._time_min = d._time_reduce(last=False, func=min)
+    d._time_max = d._time_reduce(last=True, func=max)
     for ich, str_dict in enumerate(d.ph_streams_inv_dict):
         for sel_str, index in str_dict.items():
             phot_count[sel_str] += (d.det_m[ich] == index).sum()
