@@ -424,7 +424,7 @@ def _photon_hdf5_multich(h5data, data, ondisk=True):
                          loadspecs=False)
 
 
-def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False):
+def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_order=True):
     """Load a data file saved in Photon-HDF5 format version 0.3 or higher.
 
     Photon-HDF5 is a format for a wide range of timestamp-based
@@ -436,12 +436,14 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False):
         filename (str or pathlib.Path): path of the data file to be loaded.
         ondisk (bool): if True, do not load the timestamps in memory
             using instead references to the HDF5 arrays. Default False.
-        require_setup (bool): if True (default) the input file need to
+        require_setup (bool): if True (default) the input file needs to
             have a setup group or won't be loaded. If False, accept files
             with missing setup group. Use False only for testing or
             DCR files.
         validate (bool): if True validate the Photon-HDF5 file on loading.
             If False skip any validation.
+        fix_order (bool): if True then reorder-photons so macrotimes are in
+            perfect ascending order.
 
     Returns:
         :class:`fretbursts.burstlib.Data` object containing the data.
@@ -478,6 +480,13 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False):
         _photon_hdf5_multich(h5data, d, ondisk=ondisk)
     else:
         _photon_hdf5_1ch(h5data, d, ondisk=ondisk)
+    if fix_order:
+        for i in range(len(d.ph_times_t)):
+            order = np.argsort(d.ph_times_t[i])
+            d.ph_times_t[i] = d.ph_times_t[i][order]
+            d.det_t[i] = d.det_t[i][order]
+            if d.lifetime:
+                d.nanotimes_t[i] = d.nanotimes_t[i][order]
     if not d.spectral and not d.alternated:
         d.delete('ph_times_t')
         d.delete('det_t')
@@ -784,8 +793,8 @@ def usalex_apply_period(d, delete_ph_t=True):
         _usalex_apply_period_1ch(d, ich=ich,
                                  delete_ph_t=False)
     if delete_ph_t:
-        d.delete('ph_times_t')
-        d.delete('det_t')
+        d.delete('ph_times_t', 'det_t')
+    # d.set_immutable('ph_times_m', 'det_m')
     d.add(alternation_applied=True)
     return d
 
@@ -934,9 +943,8 @@ def nsalex_apply_period(d, delete_ph_t=True, ich=0):
         _nsalex_apply_period_1ch(d, ich=ich,
                                  delete_ph_t=False)
     if delete_ph_t:
-        d.delete('ph_times_t')
-        d.delete('det_t')
-        d.delete('nanotimes_t') 
+        d.delete('ph_times_t', 'det_t', 'nanotimes_t')
+    # d.set_immutable('ph_times_m', 'det_m', 'nanotimes')
     d.add(alternation_applied=True)
     
 

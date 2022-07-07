@@ -32,7 +32,6 @@ For more examples refer to
 """
 
 from __future__ import division, print_function, absolute_import
-from builtins import range
 import copy
 import re
 
@@ -91,6 +90,11 @@ _ph_sel_color_dict = {'all': blue, 'DexDemPpol':green_p, 'DexDemSpol':green_s,
 _ph_sel_label_dict = {'all': 'All-ph', 'DexDem': 'DexDem',
                       'DexAem': 'DexAem', 'AexAem': 'AexAem',
                       'AexDem': 'AexDem'}
+_alt_color_dict_2c = {0:green, 1: red}
+_alt_color_dict_2c_pol = {0:green_p, 1:green_s, 2:red_p, 3:red_s}
+_alt_color_dict_3c = {0:green, 1: red, 3:purple}
+_alt_color_dict_3c_pol = {0:green_p, 1:green_s, 2:red_p, 3:red_s, 4:purple_p, 5:purple_s}
+
 def _ph_sel_bg_label(stream):
     trim = re.compile('(ex|em|pol|split)')
     if stream != 'all':
@@ -149,8 +153,10 @@ def bsavefig(d, s):
 #  Multi-channel plot functions
 #
 
-def mch_plot_bg(d, ax= plt.gca(), **kwargs):
+def mch_plot_bg(d, ax=None, **kwargs):
     """Plot background vs channel for DA, D and A photons."""
+    if ax is None:
+        ax = plt.gca()
     bg = d.bg_from(Ph_sel('all'))
     bg_dd = d.bg_from(Ph_sel('DexDem'))
     bg_ad = d.bg_from(Ph_sel('DexAem'))
@@ -163,26 +169,28 @@ def mch_plot_bg(d, ax= plt.gca(), **kwargs):
     ax.set_xlabel("CH"); ylabel("kcps"); grid(True); legend(loc='best')
     ax.set_title(d.name)
 
-def mch_plot_bg_ratio(d):
+def mch_plot_bg_ratio(d, ax=None):
     """Plot ratio of A over D background vs channel."""
+    if ax is None:
+        ax = plt.gca()
     bg_dd = d.bg_from(Ph_sel('DexDem'))
     bg_ad = d.bg_from(Ph_sel('DexAem'))
-    plot(r_[1:d.nch+1],
+    ax.plot(r_[1:d.nch+1],
          [ba.mean()/bd.mean() for bd, ba in zip(bg_dd, bg_ad)],
          color=green, lw=2, label='A/D')
-    xlabel("CH"); ylabel("BG Ratio A/D"); grid(True)
-    title("BG Ratio A/D "+d.name)
+    ax.set_xlabel("CH"); ylabel("BG Ratio A/D"); grid(True)
+    ax.set_title("BG Ratio A/D "+d.name)
 
-def mch_plot_bsize(d):
+def mch_plot_bsize(d, ax=plt.gca()):
     """Plot mean burst size vs channel."""
     CH = np.arange(1, d.nch+1)
-    plot(CH, [b.mean() for b in d.nt], color=blue, lw=2, label=' T')
-    plot(CH, [b.mean() for b in d.nd], color=green, lw=2, label=' D')
-    plot(CH, [b.mean() for b in d.na], color=red, lw=2, label=' A')
-    xlabel("CH"); ylabel("Mean burst size")
-    grid(True)
-    legend(loc='best')
-    title(d.name)
+    ax.plot(CH, [b.mean() for b in d.nt], color=blue, lw=2, label=' T')
+    ax.plot(CH, [b.mean() for b in d.nd], color=green, lw=2, label=' D')
+    ax.plot(CH, [b.mean() for b in d.na], color=red, lw=2, label=' A')
+    ax.set_xlabel("CH"); ylabel("Mean burst size")
+    ax.grid(True)
+    ax.legend(loc='best')
+    ax.set_title(d.name)
 
 
 ##
@@ -259,40 +267,102 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
     """
     if ax is None:
         _, ax = plt.subplots()
-
+        
     if bins is None:
-        bins = np.arange(d.nanotimes_params[ich]['tcspc_num_bins'])
-
-    D_ON_multi, A_ON_multi = d.alt_ON[ich][0], d.alt_ON[ich][1]
-    D_ON = [(D_ON_multi[i], D_ON_multi[i+1]) for i in range(0, len(D_ON_multi), 2)]
-    A_ON = [(A_ON_multi[i], A_ON_multi[i+1]) for i in range(0, len(A_ON_multi), 2)]
-
-    d_ch, a_ch = d._det_donor_accept_multich[ich]
+        bins = np.arange(d.nanotimes_params[ich]['tcspc_num_bins']+1)
+    
     hist_style_ = dict(bins=bins, histtype='step', lw=1.3, alpha=0.9, zorder=2)
     hist_style_.update(hist_style)
-
     span_style_ = dict(alpha=0.2, zorder=1)
     span_style_.update(span_style)
+    
+    alt_ON = [[(channel[i], channel[i+1]) for i in range(0, len(channel), 2)] for channel in d.alt_ON[ich]]
+    det_map = d._det_donor_accept_multich[ich]
+    
+    if d.polarization:
+        if np.max(d.det_t[ich]) == 4:
+            em_map = _alt_color_dict_2c_pol
+        elif np.max(d.det_t[ich]) == 6:
+            em_map = _alt_color_dict_3c_pol
+        else:
+            em_map = None
+    else:
+        if np.max(d.det_t[ich]) == 2:
+            em_map = _alt_color_dict_2c
+        elif np.max(d.det_t[ich]) == 3:
+            em_map = _alt_color_dict_3c
+        else:
+            em_map = None
+    if len(alt_ON) == 2:
+        ex_map = (green, red)
+    elif len(alt_ON) == 3:
+        ex_map = (green, red)
+    else:
+        ex_map = False
+    
+    if len(alt_ON) == 2:
+        ex_names = ["Donor", "Acceptor"]
+    else:
+        ex_names = [f"Excitation band {i+1}" for i in range(len(alt_ON))]
 
-    D_label = 'Donor: '
-    for d_on in D_ON:
-        D_label += '%d-%d' % (d_on[0], d_on[1])
-    A_label = 'Accept: '
-    for a_on in A_ON:
-        A_label += '%d-%d' % (a_on[0], a_on[1])
-
-    nanotimes_d = d.nanotimes_t[ich][selection_mask(d.det_t[ich], d_ch)]
-    nanotimes_a = d.nanotimes_t[ich][selection_mask(d.det_t[ich], a_ch)]
-
-    ax.hist(nanotimes_d, label=D_label, color=green, **hist_style_)
-    ax.hist(nanotimes_a, label=A_label, color=red, **hist_style_)
+    alt_labels = list()
+    for i, alt_on in enumerate(alt_ON):
+        alt_labels.append(ex_names[i])
+        for a_on in alt_on:
+            alt_labels[-1] += '%d-%d  ' % a_on[0], a_on[1]
+    ex = 0
+    for alt_map, alt_label in zip(alt_ON, alt_labels):
+        if ex_map is None:
+            for i, a_map in enumerate(alt_map):
+                ax.axvspan(a_map[0], a_map[1], label=alt_label if i == 0 else None, color=ex_map[ex], **span_style_)
+            ex += 1
+        else:
+            for i, a_map in enumerate(alt_map):
+                ax.axvspan(alt_map[0], alt_map[1], label= alt_label if i == 0 else None, **span_style_)        
+    em = 0
+    for i in det_map:
+        hist = np.histogram(d.nanotimes_t[d.det_t == i], bins=bins)
+        if em_map is not None:
+            ax.plot(hist[1][:-1], hist[0], color=em_map[em], **hist_style)
+            em += 1
+        else:
+            ax.plot(hist[1][:-1], hist[0], **hist_style)
+        
     ax.set_xlabel('Nanotime bin')
     ax.set_yscale('log')
-    for d_on in D_ON:
-        ax.axvspan(d_on[0], d_on[1], color=green, **span_style_)
-    for a_on in A_ON:
-        ax.axvspan(a_on[0], a_on[1], color=red, **span_style_)
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), frameon=False)
+    
+    # The below section shows the old non-multi-color version of the code
+    # This code sets up streams specifically based on Donor and Acceptor
+    # streams, with spectral stream 1 = Donror, spectral stream 2 = Acceptor
+    # D_ON_multi, A_ON_multi = d.alt_ON[ich][0], d.alt_ON[ich][1]
+    # D_ON = [(D_ON_multi[i], D_ON_multi[i+1]) for i in range(0, len(D_ON_multi), 2)]
+    # A_ON = [(A_ON_multi[i], A_ON_multi[i+1]) for i in range(0, len(A_ON_multi), 2)]
+
+    # d_ch, a_ch = d._det_donor_accept_multich[ich]
+    # hist_style_ = dict(bins=bins, histtype='step', lw=1.3, alpha=0.9, zorder=2)
+    # hist_style_.update(hist_style)
+
+    # span_style_ = dict(alpha=0.2, zorder=1)
+    # span_style_.update(span_style)
+
+    # D_label = 'Donor: '
+    # for d_on in D_ON:
+    #     D_label += '%d-%d  ' % (d_on[0], d_on[1])
+    # A_label = 'Acceptor: '
+    # for a_on in A_ON:
+    #     A_label += '%d-%d' % (a_on[0], a_on[1])
+
+    # nanotimes_d = d.nanotimes_t[ich][selection_mask(d.det_t[ich], d_ch)]
+    # nanotimes_a = d.nanotimes_t[ich][selection_mask(d.det_t[ich], a_ch)]
+
+    # ax.hist(nanotimes_d, label=D_label, color=green, **hist_style_)
+    # ax.hist(nanotimes_a, label=A_label, color=red, **hist_style_)
+    
+    # for d_on in D_ON:
+    #     ax.axvspan(d_on[0], d_on[1], color=green, **span_style_)
+    # for a_on in A_ON:
+    #     ax.axvspan(a_on[0], a_on[1], color=red, **span_style_)
+    # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), frameon=False)
 
 
 ## - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -816,8 +886,9 @@ def timetrace_b_rate(d, i=0, ax=None):
 
 def time_ph(d, i=0, num_ph=1e4, ph_istart=0, ax=None):
     """Plot 'num_ph' ph starting at 'ph_istart' marking burst start/end.
-    TODO: Update to use the new matplotlib eventplot.
+    
     """
+    # TODO: Update to use the new matplotlib eventplot.
     if ax is None:
         ax = plt.gca()
     b = d.mburst[i]

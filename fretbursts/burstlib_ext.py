@@ -783,7 +783,7 @@ def join_data(d_list, gap=0):
         assert d.nch == nch
         assert d.bg_time_s == bg_time_s
         for orig, stream in zip(stream_map,d._stream_map):
-            assert orig == stream
+            assert np.all(orig == stream), "Non-identical stream maps"
 
     new_d = Data(**d_list[0])
     new_d.delete('ph_times_m')

@@ -629,15 +629,19 @@ class DataContainer:
                 super().__delattr__(key)
                 self._mutable.pop(key)
     
-    def set_immutable(self, key):
-        if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
-        self._mutable[key] = False
-        super().__setattr__(key, make_immutable(getattr(self,key)))
+    def set_immutable(self, *args):
+        for key in args:
+            if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
+        for key in args:
+            self._mutable[key] = False
+            super().__setattr__(key, make_immutable(getattr(self,key)))
     
-    def set_mutable(self, key):
-        if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
-        self._mutable[key] = True
-        super().__setattr__(key, make_mutable(getattr(self,key)))
+    def set_mutable(self, *args):
+        for key in args:
+            if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
+        for key in args:
+            self._mutable[key] = True
+            super().__setattr__(key, make_mutable(getattr(self,key)))
         
     def __repr__(self):
         ret = ""
@@ -914,7 +918,7 @@ class Data(DataContainer):
         return [{i:self.ph_streams_inv_dict[ich][ph_str] for i, ph_str in enumerate(self.ph_streams_str)} for ich in range(self.nch)]
     @property
     def nd_stream(self):
-        """The Ph_sel object of donor emissino after donor excitation"""
+        """The Ph_sel object of donor emission after donor excitation"""
         if 'ex' not in self._stream_map[0] or self._stream_map[0]['ex'] is None:
             return Ph_sel('Dem')
         else:
@@ -2440,7 +2444,6 @@ class Data(DataContainer):
         Returns:
             None, all the results are saved in the `Data` object.
         """
-        # ph_sel = self._fix_ph_sel(ph_sel)
         if compact:
             self._assert_compact(ph_sel)
         pprint(" - Performing burst search (verbose=%s) ..." % verbose, mute)
@@ -2474,10 +2477,6 @@ class Data(DataContainer):
         # they are always consistent. Case 1: we perform only burst search
         # (with no call to calc_ph_num). Case 2: we re-call calc_ph_num()
         # without doing a new burst search
-        if hasattr(self,'n_ph'):
-            print(f"Line 2376, n_ph[0][0,0:4] is {self.n_ph[0][0,0:4]}, bg_corrected:{hasattr(self,'bg_corrected')}")
-        else:
-            print("Line 2376, n_ph not yet computed")
         self.add(bg_corrected=False, leakage_corrected=False,
                  dir_ex_corrected=False, dithering=False)
         self._burst_search_postprocess(
@@ -2677,7 +2676,7 @@ class Data(DataContainer):
         return [self.anisotropy(Ph_sel('AexDem'),ich=ich) for ich in range(self.nch)]
     
     
-    def fuse_bursts(self, ms=0, process=True, mute=False):
+    def fuse_bursts(self, ms=0, process=True, mute=False, inplace=True):
         """Return a new :class:`Data` object with nearby bursts fused together.
 
         Arguments:
@@ -2708,6 +2707,8 @@ class Data(DataContainer):
             new_d.calc_fret(count_ph=True, corrections=True,
                             dither=self.dithering, mute=mute, pax=self.pax)
             pprint("   [DONE Counting D/A and FRET]\n", mute)
+        if inplace:
+            self = new_d
         return new_d
 
 
@@ -3110,7 +3111,6 @@ class Data(DataContainer):
     ##
     # Methods to compute burst quantities: FRET, S, SBR, max_rate, etc ...
     #
-    # TODO: fix to no use _fix_ph_sel, and expand methods
     def calc_sbr(self, ph_sel=Ph_sel('all'), gamma=1.):
         """Return Signal-to-Background Ratio (SBR) for each burst.
 
@@ -3126,7 +3126,6 @@ class Data(DataContainer):
             A list of arrays (one per channel) with one value per burst.
             The list is also saved in `sbr` attribute.
         """
-        # ph_sel = self._fix_ph_sel(ph_sel)
         sbr = []
         for ich, mb, na, nd in enumerate(zip(self.mburst,self.nd, self.na)):
             if mb.num_bursts == 0:
@@ -3182,7 +3181,7 @@ class Data(DataContainer):
                            self.mburst)]
         return results_mch
 
-    # TODO: deprecate _fix_ph_sel usage
+
     def calc_max_rate(self, m, ph_sel=Ph_sel('all'), compact=False,
                       c=phrates.default_c):
         """Compute the max m-photon rate reached in each burst.
@@ -3196,7 +3195,6 @@ class Data(DataContainer):
                 rate estimator which is `(m - 1 - c) / t[last] - t[first]`.
                 For more details see :func:`.phtools.phrates.mtuple_rates`.
         """
-        # ph_sel = self._fix_ph_sel(ph_sel)
         Max_Rate = self.calc_burst_ph_func(func=phrates.mtuple_rates_max,
                                            func_kw=dict(m=m, c=c),
                                            ph_sel=ph_sel, compact=compact)

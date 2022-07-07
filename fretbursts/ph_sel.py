@@ -157,6 +157,18 @@ class Ph_sel():
         # check if multiple streams define same streams
         self._stream_dict = [stream for n, stream  in enumerate(self._stream_dict) if stream not in self._stream_dict[:n]]
     def get_det(self,data_map):
+        """
+        Returns the detector ids of the photon stream for the datamap of the channel
+        Arguments:
+        ---------
+            data_map: data_map dict
+                the datamap of a given chanel (data._stream_map[i])
+        Returns:
+        -------
+            streams: numpy uint8 array
+                an array of all detectors in the given channel of data that coorespond
+                to the photon selection of the given ph_sel object
+        """
         streams = np.empty(0,dtype=np.uint8)
         for stream_dict in self._stream_dict:
             stream_num = data_map['all_streams']
@@ -164,12 +176,16 @@ class Ph_sel():
                 if val is not None and key not in data_map:
                     raise ValueError(f"{key} not implemented for this Data object, must use different Ph_sel object")
                 elif val is not None:
-                    if val.max() > len(data_map[key]): raise ValueError("Detector number not impolemented")
+                    if val.max() > len(data_map[key]): raise ValueError("Detector number not implemented")
                     vals = [data_map[key][v] for v in val]
                     stream_num = np.intersect1d(stream_num,vals)
             streams = np.concatenate((streams,stream_num))
         return streams
     def get_mask(self,data_map,dets):
+        """
+        Returns the boolean mask of photons in the stream given the datamap and
+        detectors
+        """
         det_id = self.get_det(data_map)
         stream_mask = np.zeros(dets.shape,dtype=bool)
         for index in det_id:
