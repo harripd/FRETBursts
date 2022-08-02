@@ -11,6 +11,7 @@ from __future__ import division, print_function
 import os
 import sys
 import numpy as np
+from collections.abc import Iterable
 
 
 def selection_mask(arr, values):
@@ -42,7 +43,7 @@ def _is_list_of_arrays(obj):
     return isinstance(obj, list) and np.all([isinstance(v, np.ndarray)
                                              for v in obj])
 
-class HistData(object):
+class HistData:
     """Stores histogram counts and bins and provides derived fields.
 
     Attributes:
@@ -151,3 +152,12 @@ def download_file(url, save_dir='./'):
             "\rDownloaded {0:4.1f} / {1:4.1f} MB".format(current, size/2**20))
     mkdir_p(save_dir)
     urlretrieve(url, path, _report)
+
+def _mask_multi(arr, eq):
+    if isinstance(eq, Iterable):
+        mask = np.zeros(arr.shape, dtype=bool)
+        for e in eq:
+            mask += arr == e
+    else:
+        mask = arr == eq
+    return mask

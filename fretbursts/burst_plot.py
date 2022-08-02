@@ -47,8 +47,6 @@ from scipy.interpolate import UnivariateSpline
 
 # Graphics imports
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import (plot, hist, xlabel, ylabel, grid, title, legend,
-                               gca, gcf)
 from matplotlib.patches import Rectangle, Ellipse
 from matplotlib.collections import PatchCollection, PolyCollection
 from matplotlib.offsetbox import AnchoredText
@@ -63,7 +61,7 @@ from . import burstlib as bl
 from .phtools import phrates
 from . import burstlib_ext as bext
 from . import background as bg
-from .utils.misc import HistData, _is_list_of_arrays, selection_mask
+from .utils.misc import HistData, _is_list_of_arrays, selection_mask,  _mask_multi
 from .scroll_gui import ScrollingToolQT
 from . import gui_selection as gs
 
@@ -166,7 +164,10 @@ def mch_plot_bg(d, ax=None, **kwargs):
          label=' D', **kwargs)
     ax.plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg_ad], color=red, lw=2,
          label=' A', **kwargs)
-    ax.set_xlabel("CH"); ylabel("kcps"); grid(True); legend(loc='best')
+    ax.set_xlabel("CH")
+    ax.set_ylabel("kcps") 
+    ax.grid(True)
+    ax.legend(loc='best')
     ax.set_title(d.name)
 
 def mch_plot_bg_ratio(d, ax=None):
@@ -178,7 +179,9 @@ def mch_plot_bg_ratio(d, ax=None):
     ax.plot(r_[1:d.nch+1],
          [ba.mean()/bd.mean() for bd, ba in zip(bg_dd, bg_ad)],
          color=green, lw=2, label='A/D')
-    ax.set_xlabel("CH"); ylabel("BG Ratio A/D"); grid(True)
+    ax.set_xlabel("CH")
+    ax.set_ylabel("BG Ratio A/D") 
+    ax.grid(True)
     ax.set_title("BG Ratio A/D "+d.name)
 
 def mch_plot_bsize(d, ax=plt.gca()):
@@ -187,7 +190,8 @@ def mch_plot_bsize(d, ax=plt.gca()):
     ax.plot(CH, [b.mean() for b in d.nt], color=blue, lw=2, label=' T')
     ax.plot(CH, [b.mean() for b in d.nd], color=green, lw=2, label=' D')
     ax.plot(CH, [b.mean() for b in d.na], color=red, lw=2, label=' A')
-    ax.set_xlabel("CH"); ylabel("Mean burst size")
+    ax.set_xlabel("CH")
+    ax.set_ylabel("Mean burst size")
     ax.grid(True)
     ax.legend(loc='best')
     ax.set_title(d.name)
@@ -280,16 +284,16 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
     det_map = d._det_donor_accept_multich[ich]
     
     if d.polarization:
-        if np.max(d.det_t[ich]) == 4:
+        if np.max(d.det_t[ich]) == 3:
             em_map = _alt_color_dict_2c_pol
-        elif np.max(d.det_t[ich]) == 6:
+        elif np.max(d.det_t[ich]) == 5:
             em_map = _alt_color_dict_3c_pol
         else:
             em_map = None
     else:
-        if np.max(d.det_t[ich]) == 2:
+        if np.max(d.det_t[ich]) == 1:
             em_map = _alt_color_dict_2c
-        elif np.max(d.det_t[ich]) == 3:
+        elif np.max(d.det_t[ich]) == 2:
             em_map = _alt_color_dict_3c
         else:
             em_map = None
@@ -301,7 +305,7 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
         ex_map = False
     
     if len(alt_ON) == 2:
-        ex_names = ["Donor", "Acceptor"]
+        ex_names = ["Donor: ", "Acceptor: "]
     else:
         ex_names = [f"Excitation band {i+1}" for i in range(len(alt_ON))]
 
@@ -309,25 +313,25 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
     for i, alt_on in enumerate(alt_ON):
         alt_labels.append(ex_names[i])
         for a_on in alt_on:
-            alt_labels[-1] += '%d-%d  ' % a_on[0], a_on[1]
+            alt_labels[-1] += '%d-%d  ' % (a_on[0], a_on[1])
     ex = 0
     for alt_map, alt_label in zip(alt_ON, alt_labels):
         if ex_map is None:
             for i, a_map in enumerate(alt_map):
-                ax.axvspan(a_map[0], a_map[1], label=alt_label if i == 0 else None, color=ex_map[ex], **span_style_)
-            ex += 1
+                ax.axvspan(a_map[0], a_map[1], label=alt_label if i == 0 else None, **span_style_)
         else:
             for i, a_map in enumerate(alt_map):
-                ax.axvspan(alt_map[0], alt_map[1], label= alt_label if i == 0 else None, **span_style_)        
+                ax.axvspan(a_map[0], a_map[1], label= alt_label if i == 0 else None, color=ex_map[ex], **span_style_)
+        ex += 1
     em = 0
     for i in det_map:
-        hist = np.histogram(d.nanotimes_t[d.det_t == i], bins=bins)
+        hist = np.histogram(d.nanotimes_t[ich][_mask_multi(d.det_t[ich], i)], bins=bins)
         if em_map is not None:
             ax.plot(hist[1][:-1], hist[0], color=em_map[em], **hist_style)
             em += 1
         else:
             ax.plot(hist[1][:-1], hist[0], **hist_style)
-        
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), frameon=False)
     ax.set_xlabel('Nanotime bin')
     ax.set_yscale('log')
     
@@ -553,7 +557,7 @@ def timetrace_single(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
     if burst_picker and 'mburst' in d:
         _gui_timetrace_burst_sel(d, plt.gcf(), ax)
     if scroll:
-        _gui_timetrace_scroll(gcf())
+        _gui_timetrace_scroll(plt.gcf())
 
     if set_ax_limits:
         ax.set_xlim(tmin, tmin + 1)
@@ -694,9 +698,9 @@ def ratetrace_single(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Rate (kcps)')
     if burst_picker:
-        _gui_timetrace_burst_sel(d, gcf(), ax)
+        _gui_timetrace_burst_sel(d, plt.gcf(), ax)
     if scroll:
-        _gui_timetrace_scroll(gcf())
+        _gui_timetrace_scroll(plt.gcf())
 
     if set_ax_limits:
         ax.set_xlim(tmin, tmin + 1)
@@ -803,7 +807,8 @@ def timetrace_fret(d, i=0, gamma=1., ax=None, **kwargs):
         ax.plot(t[level], E[level], ms=np.sqrt((ilev+1)*15),
                  **style_kwargs)
     ax.plot(b.start*d.clk_p, d.E[i], '-k', alpha=0.1, lw=1)
-    ax.set_xlabel('Time (s)'); ylabel('E')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('E')
     _gui_timetrace_burst_sel(d, i, timetrace_fret, plt.gcf(), ax)
 
 def timetrace_fret_scatter(d, i=0, gamma=1., ax=None, **kwargs):
@@ -816,7 +821,8 @@ def timetrace_fret_scatter(d, i=0, gamma=1., ax=None, **kwargs):
     style_kwargs = dict(s=bsizes, marker='o', alpha=0.5)
     style_kwargs.update(**kwargs)
     ax.scatter(b.start*d.clk_p, d.E[i], **style_kwargs)
-    ax.set_xlabel('Time (s)'); ylabel('E')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('E')
 
 
 # def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False):
@@ -859,10 +865,10 @@ def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False, a
     for stream, bg_stream in bg.items():
         label = "%s: %d cps" % (_ph_sel_bg_label(stream) ,d.bg_mean[stream][i])
         t = arange(bg_stream[i].size) * d.bg_time_s
-        plot(t, 1e-3 * bg_stream[i], color=_strtocolor(stream), label=label, 
-             marker =_strtomarker(stream) ,**plot_style_)
+        ax.plot(t, 1e-3 * bg_stream[i], color=_strtocolor(stream), label=label, 
+                marker =_strtomarker(stream) ,**plot_style_)
     if not nolegend:
-        legend(loc='best', frameon=False, ncol=ncol)
+        ax.legend(loc='best', frameon=False, ncol=ncol)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("BG rate (kcps)")
     ax.grid(True)
@@ -881,7 +887,9 @@ def timetrace_b_rate(d, i=0, ax=None):
         assert t.size == b_rate.size
     ax.plot(t, b_rate, lw=2, label="CH%d" % (i+1))
     ax.legend(loc='best', fancybox=True, frameon=False, ncol=3)
-    ax.set_xlabel("Time (s)"); ylabel("Burst per second"); grid(True)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Burst per second")
+    ax.grid(True)
     ax.set_ylim(bottom=0)
 
 def time_ph(d, i=0, num_ph=1e4, ph_istart=0, ax=None):
@@ -1150,10 +1158,10 @@ def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
                    alpha=0.5, fillcolor=None):
     """Plot a fitted model overlay on a FRET histogram."""
     if ax is None:
-        ax2 = plt.gca()
+        ax = plt.gca()
     else:
-        ax2 = plt.twinx(ax=ax)
-        ax2.grid(False)
+        ax = plt.twinx(ax=ax)
+        ax.grid(False)
 
     if d.fit_E_curve and show_model:
         x = r_[-0.2:1.21:0.002]
@@ -1168,21 +1176,21 @@ def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
                 m1, s1, a1, m2, s2, a2 = d.fit_E_res[i, :]
             y1 = a1*norm.pdf(x, m1, s1)
             y2 = a2*norm.pdf(x, m2, s2)
-            ax2.plot(x, scale*y1, ls='--', lw=lw, alpha=alpha, color=color)
-            ax2.plot(x, scale*y2, ls='--', lw=lw, alpha=alpha, color=color)
+            ax.plot(x, scale*y1, ls='--', lw=lw, alpha=alpha, color=color)
+            ax.plot(x, scale*y2, ls='--', lw=lw, alpha=alpha, color=color)
         if fillcolor is None:
-            ax2.plot(x, scale*y, lw=lw, alpha=alpha, color=color)
+            ax.plot(x, scale*y, lw=lw, alpha=alpha, color=color)
         else:
-            ax2.fill_between(x, scale*y, lw=lw, alpha=alpha, edgecolor=color,
+            ax.fill_between(x, scale*y, lw=lw, alpha=alpha, edgecolor=color,
                              facecolor=fillcolor, zorder=10)
         if verbose:
             print('Fit Integral:', np.trapz(scale*y, x))
 
-    ax2.axvline(d.E_fit[i], lw=3, color=red, ls='--', alpha=0.6)
+    ax.axvline(d.E_fit[i], lw=3, color=red, ls='--', alpha=0.6)
     xtext = 0.6 if d.E_fit[i] < 0.6 else 0.2
     if d.nch > 1 and not no_E:
-        ax2.text(xtext, 0.81, "CH%d: $E_{fit} = %.3f$" % (i+1, d.E_fit[i]),
-                 transform=gca().transAxes, fontsize=16,
+        ax.text(xtext, 0.81, "CH%d: $E_{fit} = %.3f$" % (i+1, d.E_fit[i]),
+                 transform=ax.transAxes, fontsize=16,
                  bbox=dict(boxstyle='round', facecolor='#dedede', alpha=0.5))
 
 def hist_burst_data(
@@ -1560,7 +1568,7 @@ def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
     im.cmap.set_under(under_color)
     im.cmap.set_over(over_color)
     if cbar_ax is None:
-        gcf().colorbar(im)
+        plt.gcf().colorbar(im)
     else:
         cbar_ax.colorbar(im)
     ax.set_xlim(-0.2, 1.2)
@@ -1570,7 +1578,7 @@ def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
     ax.grid(color=grid_color)
     if gui_sel:
         # the selection object must be saved (otherwise will be destroyed)
-        hist2d_alex.gui_sel = gs.rectSelection(gcf(), gca())
+        hist2d_alex.gui_sel = gs.rectSelection(plt.gcf(), ax)
 
 
 def hexbin_alex(d, i=0, vmin=1, vmax=None, ax=None, gridsize=80, cmap='Spectral_r',
@@ -1852,7 +1860,7 @@ def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
     plot_style_['color'] = _strtocolor(ph_sel.__str__())
     plot_style_['label'] = _strtolabel(ph_sel.__str__())
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plot(t_ax[:n_trim] * scalex, counts[:n_trim], **plot_style_)
+    ax.plot(t_ax[:n_trim] * scalex, counts[:n_trim], **plot_style_)
 
     if yscale == 'log':
         ax.set_yscale(yscale)
@@ -1976,7 +1984,7 @@ def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
             label = str(ph_sel) if plt_label is None else plt_label
             fit_style_['label'] = '%s, %.2f kcps' % (label, bg_rate * 1e-3)
         n_trim = hist['n_trim']
-        plot(hist['t_ax'][:n_trim] * hist['scalex'], y_fit[:n_trim],
+        ax.plot(hist['t_ax'][:n_trim] * hist['scalex'], y_fit[:n_trim],
              **fit_style_)
 
 
@@ -2026,9 +2034,10 @@ def hist_ph_delays(
     if mask is not None: ph = ph[mask[i]]
     ph = ph[(ph < time_max_s/d.clk_p)*(ph > time_min_s/d.clk_p)]
     dph = np.diff(ph)*d.clk_p
-    H = hist(dph*1e6, bins=r_[0:1200:bin_width_us], histtype='step', **kwargs)
+    H = ax.hist(dph*1e6, bins=r_[0:1200:bin_width_us], histtype='step', **kwargs)
     ax.set_yscale('log')
-    ax.set_xlabel(u'Ph delay time (μs)'); ylabel("# Ph")
+    ax.set_xlabel(u'Ph delay time (μs)')
+    ax.set_ylabel("# Ph")
 
     efun = lambda t, r: np.exp(-r*t)*r
     re = bg.exp_fit(ph, tail_min_us=efit_tail_min_us)
@@ -2094,7 +2103,7 @@ def hist_mdelays(d, i=0, m=10, ax=None, bins_s=(0, 10, 0.02), period=0,
     burst_integral = np.trapz(x=bin_x[burst_domain],
                               y=mdelays_hist_y[burst_domain])
 
-    ax.title("I = %.1f %%" % (burst_integral*100), fontsize='small')
+    ax.set_title("I = %.1f %%" % (burst_integral*100), fontsize='small')
     #text(0.8,0.8,"I = %.1f %%" % (integr*100), transform = plt.gca().transAxes)
 
     ## MDelays plot
@@ -2242,7 +2251,8 @@ def scatter_rate_da(d, i=0, ax=None):
     b = d.mburst[i]
     Rate = lambda nX: nX[i]/b.width/d.clk_p*1e-3
     ax.plot(Rate(d.nd), Rate(d.na), 'o', mew=0, ms=3, alpha=0.1, color='blue')
-    ax.set_xlabel('D burst rate (kcps)'); ylabel('A burst rate (kcps)')
+    ax.set_xlabel('D burst rate (kcps)') 
+    ax.set_ylabel('A burst rate (kcps)')
     ax.set_xlim(-20, 100); ax.set_ylim(-20, 100)
     ax.legend(frameon=False)
 
@@ -2297,7 +2307,7 @@ def scatter_naa_nt(d, i=0, alpha=0.5, ax=None):
     """Scatterplot of nt versus naa."""
     if ax is None:
         ax = plt.gca()
-    plot(d.nt[i], d.naa[i], 'o', mew=0, ms=3, alpha=alpha, color='blue')
+    ax.plot(d.nt[i], d.naa[i], 'o', mew=0, ms=3, alpha=alpha, color='blue')
     ax.plot(arange(200), color='k', lw=2)
     ax.set_xlabel('Total burst size (nd+na+naa)'); ax.set_ylabel('Accept em-ex BS (naa)')
     ax.set_xlim(-5, 200); ax.set_ylim(-5, 120)
@@ -2538,7 +2548,7 @@ def dplot_16ch(d, func, sharex=True, sharey=True, ncols=8,
         subplotsize = (3, 3)
         figsize = (subplotsize[0] * ncols, subplotsize[1] * nrows)
     return _iter_plot(d, func, kwargs, iter_ch, nrows, ncols, figsize, AX,
-                      sharex, sharey, suptitle, grid, scale, skip_ch=skip_ch,
+                      sharex, sharey, suptitle, pgrid, scale, skip_ch=skip_ch,
                       top=top, bottom=bottom, hspace=hspace, wspace=wspace,
                       left=left, right=right)
 

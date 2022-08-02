@@ -505,6 +505,7 @@ def _stream_enum(stream_dict):
                     print(f"Warning: single key assigned to more than one {key} stream, but not all")
                 out_dict[key] = key_arr
         ph_sel_list.append(out_dict)
+    print(ph_sel_list)
     if np.any([s in ph_sel_list[:n] for n, s in enumerate(ph_sel_list)]):
         raise NotImplementedError("Multiple det_m indeces with identical identification")
         # trim the list of identical arrays down

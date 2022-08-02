@@ -1,212 +1,382 @@
-#
-# FRETBursts - A single-molecule FRET burst analysis toolkit.
-#
-# Copyright (C) 2020
-#               Paul David Harris <harripd@gmail.com>
-#
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Created on Sat Aug  7 20:36:22 2021
+Created on Mon Aug  1 17:33:05 2022
 
-@author: Paul David Harris
+@author: paul
 """
 
-import warnings
-import numpy as np
 import re
+import numpy as np
+import functools
+import warnings
+from itertools import combinations
+from collections.abc import Iterable
 
-def _process_dict(ph_dict):
-    char_map = dict(D=np.array([0],dtype=np.uint8),A=np.array([1],dtype=np.uint8),DA=None,
-                    P=np.array([0],dtype=np.uint8),S=np.array([1],dtype=np.uint8),
-                    par=np.array([0],dtype=np.uint8),per=np.array([1],dtype=np.uint8))
-    stream_dict = []
-    for ph in ph_dict:
-        stream_map = dict(ex=None,em=None,pol=None,split=None)
-        for key, val in ph.items():
-            if key not in stream_map:
-                raise ValueError(f"Stream {key} not valid")
-            elif str(val) in char_map:
-                stream_map[key] = char_map[val]
-            elif val is not None:
-                stream_map[key] = np.atleast_1d(val).astype(np.uint8)
-        stream_dict.append(stream_map)
-    return stream_dict
+def _check_kwargs(func):
+    @functools.wraps(func)
+    def kwarg_sort(*args, **kwargs):
+        for key, value in kwargs.items():
+            if isinstance(value, Iterable) and np.all([np.issubdtype(type(v), np.integer) and v >=0 for v in value]):
+                kwargs[key] = tuple(value)
+            elif isinstance(value, int) and value >= 0:
+                kwargs[key] = (value, )
+            elif value is not None:
+                raise ValueError(f"{key} received non-int or negative value(s)")
+        return func(*args, **kwargs)
+    return kwarg_sort
 
-def _process_str(ph_str):
-    stream_map = dict(ex=None,em=None,pol=None,split=None)
-    # dictionary of regex that each match the definitiion of a particular stream parameter
-    stream_regex = dict(em = re.compile(r'((\[(\d+,)*\d+\])|(\d+|A|D|DA))em'),
+
+_char_dict = {'D':(0, ), 'A':(1, ), 'DA':(0,1), 
+              'par':(0, ), 'per':(1, ), 'P':(0, ), 'S':(1, ), 
+              "0":(0, ), "1":(1, )}
+
+_inv_dict = {'ex':('D', 'A'), 'em':('D', 'A'), 'pol':('P', 'S'), 'split':('0', '1')}
+
+_ph_keys = {'ex','em','pol','split'}
+
+_stream_regex = dict(em = re.compile(r'((\[(\d+,)*\d+\])|(\d+|A|D|DA))em'), 
                     ex = re.compile(r'((\[(\d+,)*\d+\])|(\d+|A|D|DA))ex'), 
                     pol = re.compile(r'(S|P|par|per|0|1)pol'), 
                     split = re.compile(r'\d+split')) # list of regex for stream identifiers
-    char_map = dict(D=np.array([0],dtype=np.uint8),A=np.array([1],dtype=np.uint8),DA=None,
-                    P=np.array([0],dtype=np.uint8),S=np.array([1],dtype=np.uint8),
-                    par=np.array([0],dtype=np.uint8),per=np.array([1],dtype=np.uint8))
-    str_match = dict(em=re.compile(r'(\d+|DA|D|A)'),ex=re.compile(r'(\d+|DA|D|A)'),
-                     pol=re.compile(r'([01SP]|par|per)'),split=re.compile(r'[01]'))
-    stream_split = re.compile(r'(((\[(\d+,)*\d+\])|(\d+|A|D|DA))em|((\[(\d+,)*\d+\])|(\d+|A|D|DA))ex|(S|P|par|per|0|1)pol|\d+split)+[,_]?')
-    trim = re.compile('[,_]$')
-    if ph_str[0] == 'all':
-        return [stream_map]
-    stream_dict = []
-    for ph_unsplit in ph_str:
-        ph_untrim = [match.group() for match in stream_split.finditer(ph_unsplit)]
-        ph_re = ''
-        for ph_string in ph_untrim:
-            ph_re += ph_string
-        if ph_re != ph_unsplit:
-            raise ValueError("Unreadable string definition")
-        ph_split = [trim.sub('',ph_string) for ph_string in ph_untrim]
-        for ph_id in ph_split:
-            stream_temp = dict(ex=None,em=None,pol=None,split=None)
-            for str_key, regex in stream_regex.items():
-                for i, str_iter in enumerate(regex.finditer(ph_id)):
-                    ems = np.empty(0,dtype=np.uint8)
-                    if i > 0:
-                        raise ValueError(f"Cannot specify more than one {str_key} per stream")
-                    else:
-                        for arr in str_match[str_key].finditer(str_iter.group()):
-                            if arr.group() in char_map:
-                                ems = char_map[arr.group()]
-                            else:
-                                ems = np.append(ems,np.uint8(arr.group()))
-                        stream_temp[str_key] = ems
-                ph_id = regex.sub('',ph_id)
-            if len(ph_id) != 0:
-                raise ValueError(f'Could not process stream ID, unidentified characters: {ph_id}')
-            stream_dict.append(stream_temp)
-    return stream_dict
 
-def _process_kwargs(ph_kwargs):
-    stream_map = dict(ex=None,em=None,pol=None,split=None)
-    char_map = dict(D=np.array([0],dtype=np.uint8),A=np.array([1],dtype=np.uint8),DA=None,
-                    P=np.array([0],dtype=np.uint8),S=np.array([1],dtype=np.uint8),
-                    par=np.array([0],dtype=np.uint8),per=np.array([1],dtype=np.uint8))
-    depr_keys = ['Dex','Aex'] # to be deprecated 
-    depr_count = 0
-    # loop might be deprecated, used for converting Dex/Aex arguments to em/ex/pol/split type
-    for key, val in ph_kwargs.items():
-        if key in depr_keys:
-            stream_map = []
-            depr_count += 1
-            stream_map_temp = dict(ex=None,em=None,pol=None,split=None)
-            if key == 'Dex':
-                stream_map_temp['ex'] = np.array([0])
-            else:
-                stream_map_temp['ex'] = np.array([1])
-            if val == 'Dem':
-                stream_map_temp['em'] = np.array([0])
-            elif val == 'Aem':
-                stream_map_temp['em'] = np.array([1])
-            elif val == 'DAem':
-                stream_map_temp['em'] = None
-            else:
-                raise ValueError(f"Invalid {key} value")
-            if 'Pol' in ph_kwargs:
-                if ph_kwargs['Pol'] == 'Pem':
-                    stream_map_temp['pol'] = 0
-                elif ph_kwargs['Pol'] == 'Sem':
-                    stream_map_temp['pol'] = 1
-                elif ph_kwargs['Pol'] == 'SPem' or ph_kwargs['Pol'] == 'PSem' :
-                    stream_map_temp['pol'] = None
-                else:
-                    raise ValueError("Invalid Pol value")
-            stream_map.append(stream_map_temp)
-        elif depr_count != 0:
-            raise ValueError("Cannot mix Dex/Aex and em/ex/pol arguments")
-    # check if the old method was used, otherwise, process with the new method
-    if depr_count != 0:
-        warnings.warn("Using kwargs as inputs will be depricated in future release")
-    else:
-        for key, val in ph_kwargs.items():
-            if key not in stream_map:
-                raise ValueError(f"Cannot process kwarg: {key}")
-            if val in char_map:
-                stream_map[key] = char_map[val]
-            else:
-                stream_map[key] = int(val)
-        stream_map = [stream_map]
-    return stream_map
+_find_id_exem = re.compile(r'(\d+|DA|D|A)')
 
-def _invert_key(stream_key,stream_val):
-    invert_dict = {'ex':{0:'D',1:'A'},'em':{0:'D',1:'A'},'pol':{0:'P',1:'S'},'split':{0:'0',1:'1'}}
-    if stream_val.size != 1:
-        out = '['
-        for i, val in enumerate(stream_val):
-            out += str(val)
-            if i +1 < stream_val.size:
-                out += ','
-        out += ']'
-        return out
-    elif stream_val[0] in invert_dict[stream_key]:
-        return invert_dict[stream_key][stream_val[0]]
-    else:
-        return str(stream_val[0])
+_find_id = {'ex':_find_id_exem, 'em':_find_id_exem,
+            'pol':re.compile(r'([01SP]|par|per)'), 'split':re.compile(r'[01]')}
 
-class Ph_sel():
-    def __init__(self,*args,**kwargs):
-        if len(args) != 0 and len(kwargs) != 0:
-            raise ValueError("Cannot specify Ph_sel with both arguments and keyword arguments")
-        if len(args) == 0: # case of only kwargs, will be deprecated
-            self._stream_dict = _process_kwargs(kwargs)
-        elif np.all([type(arg)==dict for arg in args]): # case when set of dicts passed 
-            self._stream_dict = _process_dict(args)
-        elif np.all([type(arg)==str for arg in args]): # case when set of strings passed (prefered method)
-            self._stream_dict = _process_str(args)
+_trim = re.compile(r'[,_]$')
+
+_stream_patern = re.compile(r'(((\[(\d+,)*\d+\])|(\d+|A|D|DA))em|((\[(\d+,)*\d+\])|(\d+|A|D|DA))ex|(S|P|par|per|0|1)pol|\d+split)+[,_]?')
+
+def _inv_det(key, val):
+    det = str()
+    if val is not None:
+        if np.any([v > 1 for v in val]):
+            if len(val) == 1:
+                det += str(val[0])
+            else:
+                det += '['
+                for v in val:
+                    det += f'{v},'
+                det = det[:-1] + f']{key}'
         else:
-            raise ValueError("Must specify as strings, dictionaries, or Keyword Arguments")
-        # check if multiple streams define same streams
-        self._stream_dict = [stream for n, stream  in enumerate(self._stream_dict) if stream not in self._stream_dict[:n]]
-    def get_det(self,data_map):
-        """
-        Returns the detector ids of the photon stream for the datamap of the channel
-        Arguments:
-        ---------
-            data_map: data_map dict
-                the datamap of a given chanel (data._stream_map[i])
-        Returns:
-        -------
-            streams: numpy uint8 array
-                an array of all detectors in the given channel of data that coorespond
-                to the photon selection of the given ph_sel object
-        """
-        streams = np.empty(0,dtype=np.uint8)
-        for stream_dict in self._stream_dict:
-            stream_num = data_map['all_streams']
-            for key, val in stream_dict.items():
-                if val is not None and key not in data_map:
-                    raise ValueError(f"{key} not implemented for this Data object, must use different Ph_sel object")
-                elif val is not None:
-                    if val.max() > len(data_map[key]): raise ValueError("Detector number not implemented")
-                    vals = [data_map[key][v] for v in val]
-                    stream_num = np.intersect1d(stream_num,vals)
-            streams = np.concatenate((streams,stream_num))
-        return streams
-    def get_mask(self,data_map,dets):
-        """
-        Returns the boolean mask of photons in the stream given the datamap and
-        detectors
-        """
-        det_id = self.get_det(data_map)
-        stream_mask = np.zeros(dets.shape,dtype=bool)
-        for index in det_id:
-            stream_mask += dets == index
-        return stream_mask
-    def __str__(self):
-        out = ''
-        for i, stream_dict in enumerate(self._stream_dict):
-            if stream_dict == {'ex':None,'em':None,'pol':None,'split':None}:
-                return 'all'
-            for stream_key, stream_val in stream_dict.items():
-                if stream_val is not None:
-                    out += _invert_key(stream_key,stream_val) + stream_key
-            if i+1 < len(self._stream_dict):
-                out += '_'
-        return out
-    def __len__(self):
-        return len(self._stream_dict)
-    def __eq__(self,comp_sel):
-        if len(self) != len(comp_sel):
+            for v in val:
+                det += _inv_dict[key][v]
+            det += key
+    return det
+            
+
+class Ph_stream:
+    __slots__ = ('__ex', '__em', '__pol', '__split', '__hash')
+    @_check_kwargs
+    def __init__(self, ex=None, em=None, pol=None, split=None):
+        self.__ex = ex
+        self.__em = em
+        self.__pol = pol
+        self.__split = split
+        self.__hash = hash((ex, em, pol, split))
+    
+    def __iter__(self):
+        for stream in self.__slots__[:-1]:
+            stream = stream[2:] # odd [2:] to remove double underscore of protected attributes in slots
+            idxs = getattr(self, stream)
+            if idxs is not None:
+                yield stream, idxs
+    
+    def __hash__(self):
+        return self.__hash
+    
+    def __eq__(self, other):
+        if isinstance(other, (Ph_stream, Ph_sel)):
+            return hash(self) == hash(other)
+        else:
             return False
+    
+    def __contains__(self, other):
+        if self == other:
+            return True
+        for stream, idxs in self: # check all values in self also in other
+            oids = getattr(other, stream)
+            if oids is None or np.intersect1d(idxs, oids).size < len(oids):
+                return False
         else:
-            res = [True if c  in self._stream_dict else False for c in comp_sel._stream_dict]
-            return np.all(res)
+            return True
+    
+    def __str__(self):
+        string = str()
+        for key, val in self:
+            string += _inv_det(key, val)
+        return string
+    
+    def __repr__(self):
+        return "Ph_stream: " + self.__str__()
+    
+    @property
+    def ex(self):
+        return self.__ex
+    
+    @property
+    def em(self):
+        return self.__em
+    
+    @property
+    def pol(self):
+        return self.__pol
+    
+    @property
+    def split(self):
+        return self.__split
+    
+    @property
+    def Dex(self):
+        if self.__ex is None:
+            return True
+        else:
+            return 0 in self.__ex
+    
+    @property
+    def Aex(self):
+        if self.__ex is None:
+            return True
+        else:
+            return 1 in self.__ex
+    
+    @property
+    def Dem(self):
+        if self.__em is None:
+            return True
+        else:
+            return 0 in self.__em
+    
+    @property
+    def Aem(self):
+        if self.__em is None:
+            return True
+        else:
+            return 0 in self.__em
+    
+    @_check_kwargs
+    def update(self, **kwargs):
+        mkdict = {key:val for key, val in self}
+        mkdict.update(**kwargs)
+        return Ph_stream(**mkdict)
+    
+    def get_det(self, stream_map):
+        # get streams of importance
+        streams = [np.concatenate([stream_map[stream][idx] for idx in idxs]) for stream, idxs in self]
+        if len(streams) > 1:
+            streams = tuple(np.intersect1d(*streams))
+        elif len(streams) == 1:
+            streams = tuple(streams[0])
+        else:
+            streams = tuple(stream_map['all_streams'])
+        return streams
+    
+    def get_mask(self, stream_map, dets):
+        mask = np.zeros(dets.shape, dtype=bool)
+        for det in self.get_det(stream_map):
+            mask += det == dets
+        return mask
+
+
+def _convert_str(ph_str):
+    if ph_str in _char_dict:
+        return _char_dict[ph_str]
+    elif ph_str.isnumeric():
+        return (int(ph_str), )
+    else:
+        raise ValueError(f"Unknown stream: {ph_str}")
+    
+
+def _tuple_dets(dets, key):
+    tdet = list()
+    for attr in _find_id[key].finditer(dets[0]):
+        tdet += list(_convert_str(attr.group()))
+    return tuple(tdet)
+
+
+def _make_dets(ph_id, key, regex):
+    dets = [s.group(1) for s in regex.finditer(ph_id)]
+    ldets = len(dets)
+    if ldets == 0:
+        return None
+    elif ldets == 1:
+        return _tuple_dets(dets, key)
+    else:
+        raise ValueError(f"Cannot specify stream {key} type multiple times per stream")
+
+    
+def _process_str(ph_str):
+    if ph_str == "all":
+        return (Ph_stream(), )
+    # loop over each set of stream identifiers
+    streams = list()
+    ph_len = 0
+    for ph_id in _stream_patern.finditer(ph_str):
+        ph_id = ph_id.group()
+        ph_len += len(ph_id)
+        ph_id = _trim.sub('', ph_id) # get rid of , and _ separators
+        
+        streams.append(Ph_stream(**{key:_make_dets(ph_id, key, regex) for key, regex in _stream_regex.items()}))
+    if ph_len != len(ph_str):
+        raise ValueError(f"Non-parsable characters in string {ph_str}")
+    return streams
+
+
+def _process_dict(ph_dict):
+    if "Dex" in ph_dict or "Aem" in ph_dict:
+        if len(ph_dict) > 1 and  not ("Dex" in ph_dict and "Aex" in ph_dict):
+            raise ValueError("Cannot mix old 'Dex'/'Aex' kwargs with new 'em'/'ex' kwargs")
+        warnings.warn("Specifiying Ph_sel with Dex/Aex kwargs discourated, and will be deprecated. Prefered method to specify with string",
+                      DeprecationWarning)
+        streams = [Ph_stream(ex=_char_dict[key[:-2]], em=_char_dict[val[:-2]]) for key, val in ph_dict.items()]
+    else:
+        streams = [Ph_stream(**ph_dict)]
+    return streams
+
+def _tuplesub(phs0, phs1, key):
+    tup0, tup1 = getattr(phs0, key), getattr(phs1, key)
+    if None in (tup0, tup1):
+        sub0, sub1 = tup0 is None, tup1 is None
+    else:
+        sub0 = np.all([t0 in tup1 for t0 in tup0])
+        sub1 = np.all([t1 in tup0 for t1 in tup1])
+    return sub0, sub1
+
+def _tupunion(phs0, phs1, key):
+    tup0, tup1 = getattr(phs0, key), getattr(phs1, key)
+    if None in (tup0, tup1):
+        return None
+    else:
+        return tuple(set(tup0) | set(tup1))
+
+def _comp_break(comp, subcnt0, subcnt1):
+    if comp > 1: 
+        return True
+    elif comp == 1 and (subcnt0 > 0 or subcnt1 > 0):
+        return True
+    elif subcnt0 > 0 and subcnt1 > 0:
+        return True
+    else:
+        return False
+
+def parallel_stream(sel0, sel1):
+    if not np.all([isinstance(sel, Ph_stream) for sel in (sel0, sel1)]):
+        raise TypeError(f"parallel_stream only take Ph_stream arguments, got {type(sel0)} and {type(sel1)}")
+    comp, subcnt0, subcnt1, par = 0, 0, 0, True
+    for key in Ph_stream.__slots__[:-1]:
+        sub0, sub1 = _tuplesub(sel0, sel1, key[2:])
+        if sub0 and sub1:
+            continue
+        elif not (sub0 or sub1):
+            comp += 1
+        else:
+            subcnt0 += sub0
+            subcnt1 += sub1
+        # check for break conditions
+        if _comp_break(comp, subcnt0, subcnt1):
+            par = False
+            break
+    # generate dicationary of union of two streams
+    udict = {key[2:]:_tupunion(sel0, sel1, key[2:]) for key in Ph_stream.__slots__[:-1]}
+    return par, udict
+
+
+class Ph_sel:
+    __slots__ = ("__streams", "__hash")
+    def __init__(self, *args, **kwargs):
+        if len(args) > 0 and len(kwargs) > 0:
+            raise ValueError("Cannot specify streams as args and kwargs at the same time")
+        elif len(args) > 0:
+            streams = list()
+            for arg in args:
+                streams += _process_str(arg) if isinstance(arg, str) else _process_dict(arg)
+        elif len(kwargs) > 0:
+            streams = _process_dict(kwargs)
+        else:
+            raise ValueError("Must specify a stream or all")
+        # check no streams identical or substreams of others
+        repl_mask = [True for _ in range(len(streams))]
+        for (i, streama), (j, streamb) in combinations(enumerate(streams), 2):
+            # check if any streams can be combined
+            par, new_stream = parallel_stream(streama, streamb)
+            if par:
+                warnings.warn(f"Streams {streama.__str__()} and {streamb.__str__()} can be represented as single stream {new_stream.__str__()}")
+                streams[i] = Ph_stream(**new_stream)
+                repl_mask[j] = False
+        # drop second stream of 2 streams that were merged
+        streams = [stream for stream, m in zip(streams, repl_mask) if m]
+        # set order of streams so universal
+        stream_sort = np.argsort([hash(stream) for stream in streams])        
+        self.__streams = tuple(streams[i] for i in stream_sort)
+        self.__hash = hash(self.__streams) if len(self.__streams) > 1 else hash(self.__streams[0])
+    
+    def __hash__(self):
+        return self.__hash
+    
+    def __str__(self):
+        string = str()
+        for stream in self.__streams:
+            string += stream.__str__() + "_"
+        string = string[:-1]
+        return string
+    
+    def __repr__(self):
+        rep = 'Ph_sel: ' + self.__streams[0].__str__() + '\n'
+        for stream in self.__streams[1:]:
+            rep += '        ' + stream.__str__() + '\n'
+        rep = rep[:-1]
+        return rep
+    
+    def __len__(self):
+        return len(self.__streams)
+    
+    def __eq__(self, other):
+        if isinstance(other, (Ph_stream, Ph_sel)):
+            return hash(self) == hash(other)
+    
+    def __contains__(self, other):
+        compare = (other, ) if isinstance(other, Ph_stream) else other
+        contain = False
+        for comp in compare:
+            for stream in self.__streams:
+                if comp in stream:
+                    contain = True
+                    break
+            if contain:
+                break
+        return contain
+    
+    @property
+    def Dex(self):
+        return np.any([stream.Dex for stream in self.__streams])
+    
+    @property
+    def Dem(self):
+        return np.any([stream.Dem for stream in self.__streams])
+    @property
+    def Aex(self):
+        return np.any([stream.Aex for stream in self.__streams])
+    
+    @property
+    def Aem(self):
+        return np.any([stream.Dem for stream in self.__streams])
+    
+    @property
+    def streams(self):
+        return self.__streams
+            
+    def get_det(self, stream_map):
+        dets = self.__streams[0].get_det(stream_map)
+        for stream in self.__streams[1:]:
+            dets = np.union1d(dets, stream.get_det(stream_map))
+        return tuple(dets)
+    
+    def get_mask(self, stream_map, dets):
+        mask = np.zeros(dets.shape, dtype=bool)
+        for det in self.get_det(stream_map):
+            mask += det == dets
+        return mask
+    
+    
