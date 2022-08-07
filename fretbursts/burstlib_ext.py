@@ -59,7 +59,7 @@ import tables
 
 from .ph_sel import Ph_sel
 from . import background as bg
-from .utils.misc import pprint, HistData, _is_list_of_arrays
+from .utils.misc import pprint, HistData, _is_list_of_arrays, dict_equal
 
 from . import burstlib
 from . import select_bursts
@@ -68,7 +68,7 @@ from . import mfit
 
 from .burstlib import isarray, Data
 from .phtools.burstsearch import Bursts
-
+from itertools import islice
 
 def moving_window_startstop(start, stop, step, window=None):
     """Computes list of (start, stop) values defining a moving-window.
@@ -206,10 +206,10 @@ def _load_bg_data(store, base_name, ph_streams):
     min_ph_delays = store.get_node(group_name, 'min_ph_delays_us')[:]
     BG_data = {}
     for ph_sel in ph_streams:
-        BG_data[ph_sel.__str__()] = store.get_node(group_name, str(ph_sel))[:]
+        BG_data[ph_sel] = store.get_node(group_name, str(ph_sel))[:]
     BG_data_e = {}
     for ph_sel in ph_streams:
-        BG_data_e[ph_sel.__str__()] = store.get_node(group_name, str(ph_sel) + '_err')[:]
+        BG_data_e[ph_sel] = store.get_node(group_name, str(ph_sel) + '_err')[:]
     store.close()
     store = pd.HDFStore(store_name)
     best_bg = store[base_name + 'best_bg']
@@ -318,19 +318,19 @@ def calc_bg_brute(dx, min_ph_delay_list=None, return_all=False,
     for ph_sel in dx.ph_streams:
         # Compute BG and error for all ch, periods and thresholds
         # Shape: (nch, nperiods, len(thresholds))
-        BG_data[ph_sel.__str__()], BG_data_e[ph_sel.__str__()] = bg.fit_varying_min_delta_ph(
+        BG_data[ph_sel.__str__()], BG_data_e[ph_sel] = bg.fit_varying_min_delta_ph(
             dx, min_ph_delay_list, bg_fit_fun=bg.exp_fit, ph_sel=ph_sel,
             error_metrics=error_metrics)
 
         # Compute the best Th and BG estimate for all ch and periods
         for ich in range(dx.nch):
             for period in range(dx.nperiods):
-                b = BG_data_e[ph_sel.__str__()][ich, period, :]
+                b = BG_data_e[ph_sel][ich, period, :]
                 i_best_th = b[-np.isnan(b)].argmin()
                 best_th.loc[(ich, str(ph_sel)), period] = \
                     min_ph_delay_list[i_best_th]
                 best_bg.loc[(ich, str(ph_sel)), period] = \
-                    BG_data[ph_sel.__str__()][ich, period, i_best_th]
+                    BG_data[ph_sel][ich, period, i_best_th]
     if return_all:
         return best_th, best_bg, BG_data, BG_data_e, min_ph_delay_list
     else:
@@ -383,6 +383,9 @@ def burst_data(dx, include_bg=False, include_ph_index=False,
         if not include_bg:
             bursts_ich = {k: v for k, v in bursts_ich.items()
                           if not k.startswith('bg')}
+        n_ph = bursts_ich.pop('n_ph')
+        for i, sel in enumerate(dx.ph_streams):
+            bursts_ich['n_'+sel.short_name] = n_ph[i,:]
         return pd.DataFrame.from_dict(bursts_ich)
 
     if skip_ch is None:
@@ -774,18 +777,12 @@ def join_data(d_list, gap=0):
         `d_merged` will contain bursts from both input files.
 
     """
-    from itertools import islice
 
-    nch = d_list[0].nch
-    bg_time_s = d_list[0].bg_time_s
-    stream_map = d_list[0]._stream_map
-    for d in d_list:
-        assert d.nch == nch
-        assert d.bg_time_s == bg_time_s
-        for orig, stream in zip(stream_map,d._stream_map):
-            assert np.all(orig == stream), "Non-identical stream maps"
-
-    new_d = Data(**d_list[0])
+    assert np.all([d.nch == d_list[0].nch for d in d_list])
+    assert np.all([d.bg_time_s == d_list[0].bg_time_s for d in d_list])
+    assert dict_equal(*[d._stream_map[0] for d in d_list])
+    nch = d_list[0].nch  
+    new_d = Data(**dict(d_list[0]))
     new_d.delete('ph_times_m')
 
     # Set the bursts fields by concatenation along axis = 0
@@ -793,7 +790,7 @@ def join_data(d_list, gap=0):
         if name in new_d:
             empty = Bursts.empty() if name == 'mburst' else np.array([])
             new_d.add(**{name: [empty]*nch})
-            concatenate = Bursts.merge if name == 'mburst' else np.concatenate
+            concatenate = Bursts.merge if name == 'mburst' else np.hstack
 
             for ich in range(nch):
                 new_size = np.sum((d.mburst[ich].num_bursts for d in d_list))
@@ -801,8 +798,9 @@ def join_data(d_list, gap=0):
                     continue  # -> No bursts in this ch
 
                 value = concatenate([d[name][ich] for d in d_list])
+                vsize = value.shape[-1] if isinstance(value, np.ndarray) else value.size
                 new_d[name][ich] = value
-                assert new_d[name][ich].size == new_size
+                assert vsize == new_size
 
     # Set the background fields by concatenation along axis = 0
     new_nperiods = np.sum((d.nperiods for d in d_list))
@@ -815,7 +813,7 @@ def join_data(d_list, gap=0):
                 assert new_d[name][ich].shape[0] == new_nperiods
     if 'bg' in new_d:
         new_d.add(bg={})
-        for sel in d.bg:
+        for sel in d_list[-1].bg:
             new_d.bg[sel] = []
             for ich in range(nch):
                 value = np.concatenate([d.bg[sel][ich] for d in d_list])

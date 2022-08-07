@@ -250,7 +250,7 @@ class BurstGap(namedtuple('BurstGap',
         return self.istop - self.istart + 1 - self.gap_counts
 
 
-class Bursts(object):
+class Bursts:
     """A container for burst data.
 
     This class provides a container for burst data. It has a
@@ -552,17 +552,18 @@ class Bursts(object):
         # Go through the timestamps searching for start
         # and stop of each burst in order
         sz = times_reduced.size
-        final_time = times_reduced[sz-1] 
+        final_time = times_reduced[-1] 
         it = 0
         warn = False
         for ib, burst in enumerate(self):
             if final_time < burst.start:
-                raise Exception('Do not include all bursts')
+                raise Exception(f'Times ends before burst {ib}')
             while times_reduced[it] < burst.start:
                 it += 1
             out[ib].istart = it
             it_saved = it + 1
             if times_reduced[it] != burst.start:
+                out[ib].start = times_reduced[it]
                 warn= True
             while times_reduced[it] < burst.stop:
                 it += 1
@@ -570,12 +571,15 @@ class Bursts(object):
             # to the last of the repeats
             while it < sz and times_reduced[it] <= burst.stop:
                 it += 1
-            out[ib].istop = it - 1
+            it -= 1 # last while loop goes 1 over, so back-off by one
+            out[ib].istop = it
+            if times_reduced[it] != burst.stop:
+                out[ib].stop = times_reduced[it]
+                warn = True
             # Done with current burst, before starting a new burst,
             # reset `it` to `istart+1`
             it = it_saved
-            if times_reduced[it] != burst.stop:
-                warn = True
+            
         if warn:
             print('WARNING: reduced indexes did not inlcude origninal start and stop times, new bursts are shorter. This is expected if burst search was performed with differen ph_sel than the given times.')
         return out

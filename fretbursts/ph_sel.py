@@ -13,6 +13,8 @@ import warnings
 from itertools import combinations
 from collections.abc import Iterable
 
+from .utils.misc import intersect_multi, union_multi
+
 def _check_kwargs(func):
     @functools.wraps(func)
     def kwarg_sort(*args, **kwargs):
@@ -33,12 +35,21 @@ _char_dict = {'D':(0, ), 'A':(1, ), 'DA':(0,1),
 
 _inv_dict = {'ex':('D', 'A'), 'em':('D', 'A'), 'pol':('P', 'S'), 'split':('0', '1')}
 
+_short_dict_exem = {None:'n', 0:'d', 1:'a'}
+
+_short_dict_pol = {None:'', 0:'p', 1:'s'}
+
+_short_dict_split = {None:'', 0:'0', 1:'1'}
+
+_short_dict = {'ex':_short_dict_exem, 'em':_short_dict_exem,
+               'pol':_short_dict_pol, 'split':_short_dict_split}
+
 _ph_keys = {'ex','em','pol','split'}
 
 _stream_regex = dict(em = re.compile(r'((\[(\d+,)*\d+\])|(\d+|A|D|DA))em'), 
                     ex = re.compile(r'((\[(\d+,)*\d+\])|(\d+|A|D|DA))ex'), 
                     pol = re.compile(r'(S|P|par|per|0|1)pol'), 
-                    split = re.compile(r'\d+split')) # list of regex for stream identifiers
+                    split = re.compile(r'(\d+)split')) # list of regex for stream identifiers
 
 _find_id_exem = re.compile(r'(\d+|DA|D|A)')
 
@@ -48,6 +59,8 @@ _find_id = {'ex':_find_id_exem, 'em':_find_id_exem,
 _trim = re.compile(r'[,_]$')
 
 _stream_patern = re.compile(r'(((\[(\d+,)*\d+\])|(\d+|A|D|DA))em|((\[(\d+,)*\d+\])|(\d+|A|D|DA))ex|(S|P|par|per|0|1)pol|\d+split)+[,_]?')
+
+
 
 def _inv_det(key, val):
     det = str()
@@ -65,12 +78,22 @@ def _inv_det(key, val):
                 det += _inv_dict[key][v]
             det += key
     return det
-            
+
+def _fuse_splitpol(tup):
+    if tup is not None:
+        if np.any([t > 1 for t in tup]):
+            raise ValueError('pol and split must be None, 0 or 1')
+        elif len(tup) > 1:
+            tup = None
+    return tup
+
 
 class Ph_stream:
     __slots__ = ('__ex', '__em', '__pol', '__split', '__hash')
     @_check_kwargs
     def __init__(self, ex=None, em=None, pol=None, split=None):
+        pol = _fuse_splitpol(pol)
+        split = _fuse_splitpol(split)
         self.__ex = ex
         self.__em = em
         self.__pol = pol
@@ -107,6 +130,8 @@ class Ph_stream:
         string = str()
         for key, val in self:
             string += _inv_det(key, val)
+        if len(string) == 0:
+            string = 'all'
         return string
     
     def __repr__(self):
@@ -164,9 +189,12 @@ class Ph_stream:
     
     def get_det(self, stream_map):
         # get streams of importance
-        streams = [np.concatenate([stream_map[stream][idx] for idx in idxs]) for stream, idxs in self]
+        try:
+            streams = [np.concatenate([stream_map[stream][idx] for idx in idxs]) for stream, idxs in self]
+        except KeyError as k:
+            raise ValueError(f"Data does not differntiate {k} photons")
         if len(streams) > 1:
-            streams = tuple(np.intersect1d(*streams))
+            streams = tuple(intersect_multi(*streams))
         elif len(streams) == 1:
             streams = tuple(streams[0])
         else:
@@ -225,11 +253,12 @@ def _process_str(ph_str):
 
 
 def _process_dict(ph_dict):
-    if "Dex" in ph_dict or "Aem" in ph_dict:
+    if "Dex" in ph_dict or "Aex" in ph_dict:
         if len(ph_dict) > 1 and  not ("Dex" in ph_dict and "Aex" in ph_dict):
             raise ValueError("Cannot mix old 'Dex'/'Aex' kwargs with new 'em'/'ex' kwargs")
         warnings.warn("Specifiying Ph_sel with Dex/Aex kwargs discourated, and will be deprecated. Prefered method to specify with string",
                       DeprecationWarning)
+        ph_dict = {key:val for key, val in ph_dict.items() if val is not None}
         streams = [Ph_stream(ex=_char_dict[key[:-2]], em=_char_dict[val[:-2]]) for key, val in ph_dict.items()]
     else:
         streams = [Ph_stream(**ph_dict)]
@@ -260,6 +289,7 @@ def _comp_break(comp, subcnt0, subcnt1):
         return True
     else:
         return False
+        
 
 def parallel_stream(sel0, sel1):
     if not np.all([isinstance(sel, Ph_stream) for sel in (sel0, sel1)]):
@@ -337,7 +367,7 @@ class Ph_sel:
             return hash(self) == hash(other)
     
     def __contains__(self, other):
-        compare = (other, ) if isinstance(other, Ph_stream) else other
+        compare = (other, ) if isinstance(other, Ph_stream) else other.streams
         contain = False
         for comp in compare:
             for stream in self.__streams:
@@ -364,13 +394,51 @@ class Ph_sel:
         return np.any([stream.Dem for stream in self.__streams])
     
     @property
+    def pol(self):
+        pol = self.__streams[0].pol
+        pols = [stream.pol == pol for stream in self.__streams]
+        pol = pol[0] if pol is not None else None
+        if not np.all(pols):
+            pol = False
+        return pol
+    
+    @property
+    def ex(self):
+        ex = tuple()
+        for stream in self.__streams:
+            ex = set(ex) | set(stream.ex)
+        return tuple(ex)
+    
+    @property
+    def em(self):
+        em = tuple()
+        for stream in self.__streams:
+            em = set(em) | set(stream.em)
+        return tuple(em)
+    
+    @property
     def streams(self):
         return self.__streams
+    
+    @property
+    def short_name(self):
+        name = str()
+        if np.any([stream == Ph_sel('all') for stream in self.__streams]):
+            name = 'all'
+        elif len(self.__streams) == 1:
+            single = np.all([len(val) < 2 for _, val in self.__streams[0]])
+            norm = np.all(np.concatenate(([val for _, val in self.__streams[0]])) < 2)
+            if single and norm:
+                for stream, val in self.__streams[0]:
+                    name += _short_dict[stream][val[0]]
+            else:
+                name += self.__str__()
+        else:
+            name += self.__str__()
+        return name
             
     def get_det(self, stream_map):
-        dets = self.__streams[0].get_det(stream_map)
-        for stream in self.__streams[1:]:
-            dets = np.union1d(dets, stream.get_det(stream_map))
+        dets = union_multi(*[stream.get_det(stream_map) for stream in self.__streams])
         return tuple(dets)
     
     def get_mask(self, stream_map, dets):

@@ -184,7 +184,7 @@ def _load_photon_data_arrays(data, ph_data, ondisk=False):
 
     # Build mapping to convert Photon-HDF5 to FRETBursts names
     # fields not mapped use the same name on both Photon-HDF5 and FRETBursts
-    mapping = {'timestamps': 'ph_times_m',
+    mapping = {'timestamps': 'ph_times_m','detectors': 'det_m',
                'nanotimes': 'nanotimes', 'particles': 'particles'}
     if data.alternated:
         mapping = {'timestamps': 'ph_times_t', 'detectors': 'det_t',
@@ -286,9 +286,10 @@ def _load_alex_periods_donor_acceptor(data, meas_specs,ich):
 
 
 def _compute_stream_dict(data, ich):
-    if data.detectors[ich].dtype.itemsize !=1:
+    """Computer _stream_map, mainly for non-alternated data"""
+    if data.det_m[ich].dtype.itemsize !=1:
         raise NotImplementedError("Detectors dtype must be 1 byte")
-    det_ich = data.detectors[ich]
+    det_ich = data.det_m[ich]
     unique_det = np.unique(det_ich)
     spec_map = data.det_spectral[ich] if hasattr(data,'det_spectral') else None
     pol_map = data.det_p_s_pol[ich] if hasattr(data,'det_p_s_pol') else None
@@ -296,31 +297,40 @@ def _compute_stream_dict(data, ich):
     spec_union = _union_of_list(spec_map)
     pol_union = _union_of_list(pol_map)
     split_union = _union_of_list(split_map)
-    if spec_map is None:
-        spec_union = pol_union
-    if pol_map is None:
-        pol_union = split_union
-    if split_map is None:
-        split_map = spec_map
-    if spec_union.size != pol_union.size != split_union.size:
-        log.warning("Incomplete mapping of detectors in HDF5 file to Spectral/Polarization/split channels")
-    elif np.any(spec_union != pol_union) and np.any(spec_union != split_union):
-        log.warning("Some detector indexes lack a Spectral, Polarization or Split identity, likely one or more channels overdefined")
-        det_union = np.union1d(spec_union,pol_union)
-        det_union = np.union1d(det_union,split_union)
-    else:
-        det_union = spec_union
+    det_union = np.empty(0, dtype=np.uint8)
+    union_list = [spec_union, pol_union, split_union]
+    for i in range(len(union_list)):
+        if union_list[i].size == 0:
+            union_list[i] = det_union
+        elif det_union.size == 0:
+            det_union = union_list[i]
+        elif det_union.size != union_list[i].size:
+            det_union = np.union1d(det_union, union_list[i])
+            log.warning("Incomplete mapping of detectors in HDF5 file to Spectral/Polarization/split channels")
+        elif np.any(det_union != union_list[i]):
+            log.warning("Some detector indexes lack a Spectral, Polarization or Split identity, likely one or more channels overdefined")
+            det_union = np.union1d(det_union, union_list[i])
     if det_union.size < unique_det.size:
         raise ValueError("Underdefined detector indeces in HDF5 file")
-    elif det_union.size != np.union1d(det_union,unique_det):
+    elif det_union.size != np.union1d(det_union,unique_det).size:
         raise ValueError("Undefined detector indeces in HDF5 file")
-    stream_map = {}
+    stream_map = {'ex':(det_union, )}
     if spec_map is not None: stream_map['em'] = spec_map
     if pol_map is not None: stream_map['pol'] = pol_map
     if split_map is not None: stream_map['split'] = split_map
     stream_map['all_streams'] = det_union
     _append_data_ch(data, '_stream_map', stream_map)
-    
+
+
+_IPH_error_msg = "/photon_data{nchan} conflicts with other /ph_data groups in field {name}"
+
+_IPH_error_dict = {'alt':'alternated', 'nanotimes':'lifetime', 'pol':'polarization',
+              'spec':'spectral', 'PAX':'ALEX'}
+
+def _check_meas_dict(meas_dict0, meas_dict1, ich):
+    for key0, val0 in meas_dict0.items():
+        if not np.any(meas_dict1[key0] != val0):
+            phc.hdf5.Invalid_PhotonHDF5(_IPH_error_msg.format(nchan=ich, name=_IPH_error_dict.get(key0, key0)))
 
 def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     
@@ -346,25 +356,11 @@ def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
         data.add(spectral= meas_dict['spec'] > 1)
         data.add(num_colors = meas_dict['spec'])
     else: # check that all data fields have matching types
-        msg = r"/photon_data{nchan} conflicts with other /ph_data groups in field {name}"
         meas_dict, meas_specs, meas_string = _get_measurement_specs(ph_data, h5data.setup)
         # regex identifies number of colors in the meas_type
         if data.nch != nch:
             raise ValueError("nch changed between channel loads")
-        if data.meas_dict != meas_dict:
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='meas_type'))
-        if data.ALEX != np.any(meas_dict['alt']) and not meas_dict['PAX']:
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='ALEX'))
-        if data.alternated != np.any(meas_dict['alt']):
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='alternated'))
-        if data.lifetime != 'nanotimes' in ph_data:
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='lifetime'))
-        if data.polarization != meas_dict['pol']:
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='polarization'))
-        if data.spectral != meas_dict['spec'] > 1:
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='spectral'))
-        if data.num_colors != meas_dict['spec']:
-            raise phc.hdf5.Invalid_PhotonHDF5(msg.format(nchan=nch,name='num_colors'))
+        _check_meas_dict(data.meas_dict, meas_dict, ich)
     
     # Load photon_data arrays
     _load_photon_data_arrays(data, ph_data, ondisk=ondisk)
@@ -399,10 +395,6 @@ def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     if data.spectral and not data.alternated:
         # No alternation, we can compute the emission masks right away
         _compute_stream_dict(data, ich)
-        _append_data_ch(data,'ph_times_m', data.ph_times_t)
-        _append_data_ch(data,'det_m', data.det_t)
-        if data.lifetime:
-            _append_data_ch(data,'nanotimes',data.nanotimes_t)
 
     if loadspecs and data.spectral and data.alternated and not data.lifetime:
         # load alternation metadata for usALEX or PAX
@@ -481,17 +473,20 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_
     else:
         _photon_hdf5_1ch(h5data, d, ondisk=ondisk)
     if fix_order:
-        for i in range(len(d.ph_times_t)):
-            order = np.argsort(d.ph_times_t[i])
-            d.ph_times_t[i] = d.ph_times_t[i][order]
-            d.det_t[i] = d.det_t[i][order]
-            if d.lifetime:
-                d.nanotimes_t[i] = d.nanotimes_t[i][order]
-    if not d.spectral and not d.alternated:
-        d.delete('ph_times_t')
-        d.delete('det_t')
-        if d.lifetime:
-            d.delete('nanotimes_t')
+        if hasattr(d, 'ph_times_t'):
+            for i in range(d.nch):
+                order = np.argsort(d.ph_times_t[i])
+                d.ph_times_t[i] = d.ph_times_t[i][order]
+                d.det_t[i] = d.det_t[i][order]
+                if d.lifetime:
+                    d.nanotimes_t[i] = d.nanotimes_t[i][order]
+        else:
+            for i in range(d.nch):
+                order = np.argsort(d.ph_times_m[i])
+                d.ph_times_m[i] = d.ph_times_m[i][order]
+                d.det_m[i] = d.det_m[i][order]
+                if d.lifetime:
+                    d.nanotimes[i] = d.nanotimes[i][order]
     if not ondisk:
         h5file.close()
 
@@ -516,6 +511,17 @@ def _select_inner_range(times, period, edges):
 
 
 def _select_range(times, period, edges):
+    """
+    Retern a mask of photons within an excitation period for usALEX measurements
+    Arguments
+    ---------
+    times : np.ndarray
+        the times ( of photons
+    period : int
+        The alternation period (one full Dex/Dem cycle)
+    edges : array-like
+        The edges of the excitation window, 2 element array
+    """
     return _select_inner_range(times, period, edges) if edges[0] < edges[1] \
         else _select_outer_range(times, period, edges)
 
@@ -573,7 +579,7 @@ def _union_of_list(det_map):
             det_union = np.union1d(det_union,dets)
         return det_union
     else:
-        return np.empty(0,dtype=np.uint8)
+        return np.empty(0, dtype=np.uint8)
 
 def _reallocate_det_maps(det_map,unique_det):
     """
@@ -688,10 +694,10 @@ def _usalex_apply_period_1ch(d, delete_ph_t=True, ich=0):
     valid_mask = valid_sum == 1
     # valid_red is only photons inside an excitation period
     valid_red = valid[:,valid_mask]
-    ex_period = np.empty(valid_red.shape[1],dtpye=np.uint8)
+    ex_period = np.empty(valid_red.shape[1],dtype=np.uint8)
     # make an array of which excitation period each "valid" photon belongs to
     for i in range(valid_red.shape[0]):
-        ex_period[valid_red[i,:]] = i
+        ex_period[valid_red[i,:]==1] = i
     _apply_period_1ch(d, ph_times_t, det_t, valid_mask, ex_period, ich=ich)
     
     if delete_ph_t:
@@ -1007,7 +1013,7 @@ def alex_apply_period(d, delete_ph_t=True):
     apply_period_func(d, delete_ph_t=delete_ph_t)
     ph_data_size = d.ph_data_sizes.sum()
     msg = ('# Total photons (after ALEX selection):  {:12,}\n'.format(ph_data_size))
-    phot_count = {ph_str:0 for ph_str in d.ph_streams_str}
+    phot_count = {ph_str:0 for ph_str in d.ph_streams}
     d._time_min = d._time_reduce(last=False, func=min)
     d._time_max = d._time_reduce(last=True, func=max)
     for ich, str_dict in enumerate(d.ph_streams_inv_dict):

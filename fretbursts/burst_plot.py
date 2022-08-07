@@ -33,7 +33,7 @@ For more examples refer to
 
 from __future__ import division, print_function, absolute_import
 import copy
-import re
+# import re
 
 import warnings
 from itertools import cycle
@@ -79,43 +79,41 @@ red_s = '#e7123a'
 purple = '#9b59b6'
 purple_p = '#8b59b6'
 purple_s = '#ab59b6'
-_ph_sel_color_dict = {'all': blue, 'DexDemPpol':green_p, 'DexDemSpol':green_s,
-                      'DexDem': green, 'Dem':green,
-                      'DexAemPpol': red_p,'DexAemSpol': red_s,
-                      'DexAem': red, 'Aem': red,
-                      'AexAemPpol': purple_p, 'AexAemSpol': purple_s, 'AexAem': purple,
-                      'AexDem': 'c', }
-_ph_sel_label_dict = {'all': 'All-ph', 'DexDem': 'DexDem',
-                      'DexAem': 'DexAem', 'AexAem': 'AexAem',
-                      'AexDem': 'AexDem'}
+_ph_sel_color_dict = {Ph_sel('all'): blue, Ph_sel('DexDemPpol'):green_p, Ph_sel('DexDemSpol'):green_s,
+                      Ph_sel('DexDem'): green, Ph_sel('Dem'):green,
+                      Ph_sel('DexAemPpol'): red_p,Ph_sel('DexAemSpol'): red_s,
+                      Ph_sel('DexAem'): red, Ph_sel('Aem'): red,
+                      Ph_sel('AexAemPpol'): purple_p, Ph_sel('AexAemSpol'): purple_s, Ph_sel('AexAem'): purple,
+                      Ph_sel('AexDem'): 'c', }
+_ph_sel_label_dict = {Ph_sel('all'): 'All-ph', Ph_sel('DexDem'): 'DexDem',
+                      Ph_sel('DexAem'): 'DexAem', Ph_sel('AexAem'): 'AexAem',
+                      Ph_sel('AexDem'): 'AexDem'}
 _alt_color_dict_2c = {0:green, 1: red}
 _alt_color_dict_2c_pol = {0:green_p, 1:green_s, 2:red_p, 3:red_s}
 _alt_color_dict_3c = {0:green, 1: red, 3:purple}
 _alt_color_dict_3c_pol = {0:green_p, 1:green_s, 2:red_p, 3:red_s, 4:purple_p, 5:purple_s}
 
 def _ph_sel_bg_label(stream):
-    trim = re.compile('(ex|em|pol|split)')
-    if stream != 'all':
-        return trim.sub('',stream)
+    if stream != Ph_sel('all'):
+        return stream.__str__()
     else:
         return "T"
 
-def _strtocolor(stream):
-    for key, color in _ph_sel_color_dict.items():
-        if key in stream:
-            return color
-    return 'k'
+def _seltocolor(stream):
+    return _ph_sel_color_dict.get(stream, 'k')
 
-def _strtomarker(stream):
-    if 'pol' in stream:
-        if 'S' in stream:
+def _seltomarker(stream):
+    pol = stream.pol
+    if isinstance(pol, int):
+        if pol == 1:
             return 'X'
         else:
             return 'P'
     else:
         return 'o'
-def _strtolabel(stream):
-    return 'All-ph' if stream == 'all' else stream
+
+def _seltolabel(stream):
+    return 'All-ph' if stream == Ph_sel('all') else stream.__str__()
 # Global store for plot status
 _plot_status = {}
 
@@ -184,8 +182,10 @@ def mch_plot_bg_ratio(d, ax=None):
     ax.grid(True)
     ax.set_title("BG Ratio A/D "+d.name)
 
-def mch_plot_bsize(d, ax=plt.gca()):
+def mch_plot_bsize(d, ax=None):
     """Plot mean burst size vs channel."""
+    if ax is None:
+        plt.gca()
     CH = np.arange(1, d.nch+1)
     ax.plot(CH, [b.mean() for b in d.nt], color=blue, lw=2, label=' T')
     ax.plot(CH, [b.mean() for b in d.nd], color=green, lw=2, label=' D')
@@ -230,7 +230,7 @@ def plot_alternation_hist_usalex(d, bins=None, ax=None, ich=0,
 
     D_ON, A_ON = d.alt_ON[ich][0], d.alt_ON[ich][1]
     d_ch, a_ch = d._det_donor_accept_multich[ich]
-    offset = d.get('offset', 0)
+    offset = d['offset'] if hasattr(d, 'offset') else 0
     ph_times_t, det_t = d.ph_times_t[ich][:], d.det_t[ich][:]
     period = d.alex_period
     d_em_t = selection_mask(det_t, d_ch)
@@ -283,17 +283,18 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
     alt_ON = [[(channel[i], channel[i+1]) for i in range(0, len(channel), 2)] for channel in d.alt_ON[ich]]
     det_map = d._det_donor_accept_multich[ich]
     
+    det_sz = np.unique(d.det_t[ich]).size
     if d.polarization:
-        if np.max(d.det_t[ich]) == 3:
+        if det_sz == 4:
             em_map = _alt_color_dict_2c_pol
-        elif np.max(d.det_t[ich]) == 5:
+        elif det_sz == 6:
             em_map = _alt_color_dict_3c_pol
         else:
             em_map = None
     else:
-        if np.max(d.det_t[ich]) == 1:
+        if det_sz == 2:
             em_map = _alt_color_dict_2c
-        elif np.max(d.det_t[ich]) == 2:
+        elif det_sz == 4:
             em_map = _alt_color_dict_3c
         else:
             em_map = None
@@ -541,8 +542,8 @@ def timetrace_single(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
 
     # Plot timetrace
     plot_style_ = dict(linestyle='-', linewidth=1.2, marker=None)
-    plot_style_['color'] = _strtocolor(ph_sel.__str__())
-    plot_style_['label'] = _strtolabel(ph_sel.__str__())
+    plot_style_['color'] = _seltocolor(ph_sel)
+    plot_style_['label'] = _seltocolor(ph_sel)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
     ax.plot(x, timetrace, **plot_style_)
 
@@ -685,8 +686,8 @@ def ratetrace_single(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
 
     # Plot ratetrace
     plot_style_ = dict(linestyle='-', linewidth=1.2, marker=None)
-    plot_style_['color'] = _strtocolor(ph_sel.__str__())
-    plot_style_['label'] = _strtolabel(ph_sel.__str__())
+    plot_style_['color'] = _seltocolor(ph_sel)
+    plot_style_['label'] = _seltocolor(ph_sel)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
     ax.plot(times, rates, **plot_style_)
 
@@ -865,8 +866,8 @@ def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False, a
     for stream, bg_stream in bg.items():
         label = "%s: %d cps" % (_ph_sel_bg_label(stream) ,d.bg_mean[stream][i])
         t = arange(bg_stream[i].size) * d.bg_time_s
-        ax.plot(t, 1e-3 * bg_stream[i], color=_strtocolor(stream), label=label, 
-                marker =_strtomarker(stream) ,**plot_style_)
+        ax.plot(t, 1e-3 * bg_stream[i], color=_seltocolor(stream), label=label, 
+                marker =_seltomarker(stream) ,**plot_style_)
     if not nolegend:
         ax.legend(loc='best', frameon=False, ncol=ncol)
     ax.set_xlabel("Time (s)")
@@ -1857,8 +1858,8 @@ def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
 
     # Plot histograms
     plot_style_ = dict(marker='o', markersize=5, linestyle='none', alpha=0.6)
-    plot_style_['color'] = _strtocolor(ph_sel.__str__())
-    plot_style_['label'] = _strtolabel(ph_sel.__str__())
+    plot_style_['color'] = _seltocolor(ph_sel)
+    plot_style_['label'] = _seltolabel(ph_sel)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
     ax.plot(t_ax[:n_trim] * scalex, counts[:n_trim], **plot_style_)
 
@@ -1915,11 +1916,11 @@ def hist_interphoton(d, i=0, binwidth=1e-4, tmax=None, bins=None, period=None,
     if ax is None:
         ax = plt.gca()
     # Plot multiple timetraces
-    ph_sel_list = [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
+    ph_sel_list = [Ph_sel('all'), Ph_sel('DexDem'), Ph_sel('DexAem')]
     if d.alternated:
-        ph_sel_list.append(Ph_sel(Aex='Aem'))
+        ph_sel_list.append(Ph_sel('Aem'))
         if show_da:
-            ph_sel_list.append(Ph_sel(Aex='Dem'))
+            ph_sel_list.append(Ph_sel('AexDem'))
 
     for ix, ph_sel in enumerate(ph_sel_list):
         if not bl.mask_empty(d.get_ph_mask(i, ph_sel=ph_sel)):
@@ -2319,7 +2320,7 @@ def scatter_alex(d, i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.E[i], d.S[i], 'o', **plot_style)
     ax.set_xlabel("E"); ax.set_ylabel('S')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 1.2)
@@ -2331,7 +2332,7 @@ def scatter_Erd(d, i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.E[i], d.rd[i], 'o', **plot_style)
     ax.set_xlabel("E"); ax.set_ylabel('$r_{D}$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2343,7 +2344,7 @@ def scatter_Era(d, i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.E[i], d.ra[i], 'o', **plot_style)
     ax.set_xlabel("E"); ax.set_ylabel('$r_{A}$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2355,7 +2356,7 @@ def scatter_Eraa(d, i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.E[i], d.raa[i], 'o', **plot_style)
     ax.set_xlabel("E"); ax.set_ylabel('$r_{AA}$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2367,7 +2368,7 @@ def scatter_Er(d, ph_sel=Ph_sel('all'),i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.E[i], d.anisotropy(ph_sel,ich=i), 'o', **plot_style)
     ax.set_xlabel("E"); ax.set_ylabel('$r$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2392,7 +2393,7 @@ def scatter_Sra(d, i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.S[i], d.ra[i], 'o', **plot_style)
     ax.set_xlabel("S"); ax.set_ylabel('$r_{A}$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2404,7 +2405,7 @@ def scatter_Sraa(d, i=0, ax=None,**kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.S[i], d.raa[i], 'o', **plot_style)
     ax.set_xlabel("S"); ax.set_ylabel('$r_{AA}$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2416,7 +2417,7 @@ def scatter_Sr(d, ph_sel=Ph_sel('all'),i=0, ax=None, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     ax.plot(d.S[i], d.anisotropy(ph_sel,ich=i), 'o', **plot_style)
     ax.set_xlabel("S"); ax.set_ylabel('$r$')
     ax.set_xlim(-0.2, 1.2); ax.set_ylim(-0.2, 0.6)
@@ -2806,8 +2807,8 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
             vmax = _alex_hexbin_vmax(jplot, vmax_fret=vmax_fret)
         jplot.set_clim(vmin, vmax)
     elif kind.startswith("kde"):
-        joint_kws_ = dict(shade=True, shade_lowest=False, n_levels=30,
-                          cmap=cmap, clip=(-0.4, 1.4), bw=0.03)
+        joint_kws_ = dict(shade=True, thresh=0.05, n_levels=30,
+                          cmap=cmap, clip=(-0.4, 1.4), bw_adjust=0.03)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
         jplot = sns.kdeplot(x=d[E_name][0], y= d[S_name][0], ax=ax_joint, 

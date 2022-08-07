@@ -29,7 +29,7 @@ from numpy import zeros, size, r_
 import scipy.stats as SS
 import warnings
 
-from .utils.misc import pprint, clk_to_s, deprecate
+from .utils.misc import pprint, clk_to_s, deprecate, union_multi, dict_equal
 from .poisson_threshold import find_optimal_T_bga
 from . import fret_fit
 from . import bg_cache
@@ -481,92 +481,44 @@ def mask_empty(mask):
 
 def _stream_enum(stream_dict):
     all_streams = np.empty(0,dtype=np.uint8)
+    # make 'all_streams' as union of every array in stream_dict
     for key, val in stream_dict.items():
         if key != 'all_streams':
             if val is not None:
                 for val_arr in val:
                     all_streams = np.union1d(all_streams,val_arr)
     if all_streams.size != stream_dict['all_streams'].size or np.any(all_streams != stream_dict['all_streams']):
-        print("Warning: 'all_streams' values inconsistent with other keys")
+        warnings.warn("Warning: 'all_streams' values inconsistent with other keys")
     ph_sel_list = []
+    # loop indexes to assign to correct element stream
     for index in all_streams:
         out_dict = dict(ex=None,em=None,pol=None,split=None)
+        # loop each posible stream category
         for key in ['ex','em','pol','split']:
+            # check if type exists for this measurement, otherwise continue to next stream type
             if key in stream_dict:
                 val = stream_dict[key]
             else:
                 continue
             key_arr = np.empty(0,dtype=np.uint8)
+            # loop over each set of arrays in stream definition
+            # remember, val is list of arrays, so arr is all that belong to a given number
             for i, arr in enumerate(val):
+                # add index to key_arr if the current index is in the set stream, should only be triggered once
                 if index in arr:
                     key_arr = np.union1d(key_arr,i)
-            if key_arr.size != len(val) and key_arr.size != 0:
+            if key_arr.size != 0:
                 if key_arr.size != 1:
-                    print(f"Warning: single key assigned to more than one {key} stream, but not all")
+                    warnings.warn(f"Warning: single key assigned to more than one {key} stream, but not all")
                 out_dict[key] = key_arr
         ph_sel_list.append(out_dict)
-    print(ph_sel_list)
     if np.any([s in ph_sel_list[:n] for n, s in enumerate(ph_sel_list)]):
         raise NotImplementedError("Multiple det_m indeces with identical identification")
         # trim the list of identical arrays down
     ph_sel_dict = {i:Ph_sel(sel) for i, sel in zip(all_streams,ph_sel_list)}
     return ph_sel_dict
 
-def make_immutable(value):
-    val_type = type(value)
-    if val_type == list:
-        new_value = list()
-        for i, val in enumerate(value):
-            new_value.append(make_immutable(val))
-        new_value = tuple(new_value)
-    elif val_type == np.ndarray:
-        new_value = value
-        new_value.setflags(write=False)
-    elif val_type == dict:
-        new_value = imdict(**value)
-    else:
-        new_value = value
-    return new_value
 
-def make_mutable(value):
-    val_type = type(value)
-    if val_type == tuple:
-        new_value = list()
-        for val in value:
-            new_value.append(make_mutable(val))
-    elif val_type == np.ndarray:
-        new_value = value
-        new_value.setflags(write=True)
-    elif val_type == imdict:
-        new_value = dict()
-        for key, val in value.items():
-            new_value[key] = make_mutable(val)
-    else:
-        new_value = value
-    return new_value
-
-class imdict(dict):
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            super().__setitem__(key, make_immutable(value))
-    def __setitem__(self, key, value):
-        raise AttributeError("DataDict does not support assignment")
-    def __setattr__(self, key, value):
-        raise AttributeError("DataDict does not support assignment")
-    def __getattr__(self, key):
-        return self[key]
-    def __dict__(self):
-        return {key:value for key, value in self.items()}
-    def update(self, *args, **kwargs):
-        raise AttributeError("update disabled for imdict")
-    def pop(self, *args):
-        raise AttributeError("pop disabled for imdict")
-    def popitem(self):
-        raise AttributeError("popitem disabled for imdict")
-    def __copy__(self):
-        return imdict(**copy.copy(dict(self)))
-    def __deepcopy__(self, memo={}):
-        return imdict(**copy.deepcopy(dict(self)))
 
 class DataContainer:
     def __init__(self, **kwargs):
@@ -629,20 +581,6 @@ class DataContainer:
             else:
                 super().__delattr__(key)
                 self._mutable.pop(key)
-    
-    def set_immutable(self, *args):
-        for key in args:
-            if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
-        for key in args:
-            self._mutable[key] = False
-            super().__setattr__(key, make_immutable(getattr(self,key)))
-    
-    def set_mutable(self, *args):
-        for key in args:
-            if key not in self._mutable: raise KeyError(f"{key} does not exist in this DataContainer")
-        for key in args:
-            self._mutable[key] = True
-            super().__setattr__(key, make_mutable(getattr(self,key)))
         
     def __repr__(self):
         ret = ""
@@ -855,7 +793,7 @@ class Data(DataContainer):
     @property
     def ph_streams_dict(self):
         """
-        Returns the list of dictionaries, mapping det_m indeces to stream types
+        Returns the list of dictionaries, mapping **det_m** indeces to **Ph_sel**
 
         Raises
         ------
@@ -878,9 +816,10 @@ class Data(DataContainer):
             ph_sel_dict = [_stream_enum((self._stream_map[ich])) for ich in range(self.nch)]
             identical = True
             if self.nch > 1:
-                for ph in ph_sel_dict[1:].values():
-                    if ph not in ph_sel_dict[0].values():
-                        identical = False
+                for ph_chan in ph_sel_dict[1:]:
+                    for ph_sel in ph_chan.values():
+                        if ph_sel not in ph_sel_dict[0].values():
+                            identical = False
             if identical:
                 self.add(_ph_streams_dict=ph_sel_dict)
             else:
@@ -898,10 +837,11 @@ class Data(DataContainer):
         if hasattr(self,'_ph_streams_str'):
             return self._ph_streams_str
         else:
-            self.add(_ph_streams_str = [s.__str__() for s in self.ph_streams])
+            self.add(_ph_streams_str = [s for s in self.ph_streams])
             return self._ph_streams_str
     @property
     def ph_streams_str_dict(self):
+        """Dictionary with keys of detectors, and values of Ph_sel"""
         if hasattr(self,'_ph_streams_str_dict'):
             return self._ph_streams_str_dict
         else:
@@ -910,27 +850,31 @@ class Data(DataContainer):
             return self._ph_streams_str_dict
     @property
     def ph_streams_inv_dict(self):
-        return [{val:key for key, val in self.ph_streams_str_dict[ich].items()} for ich in range(self.nch)]
+        """Dictionary of Ph_sel keys and detector values"""
+        return [{val:key for key, val in self.ph_streams_dict[ich].items()} for ich in range(self.nch)]
     @property
     def stream_map(self):
         return self._stream_map
     @property
     def ph_streams_n_ph_map(self):
-        return [{i:self.ph_streams_inv_dict[ich][ph_str] for i, ph_str in enumerate(self.ph_streams_str)} for ich in range(self.nch)]
+        return [{i:self.ph_streams_inv_dict[ich][ph_sel] for i, ph_sel in enumerate(self.ph_streams)} for ich in range(self.nch)]
+    @property
+    def ph_streams_n_ph_inv_map(self):
+        return [{self.ph_streams_inv_dict[ich][ph_sel]:i for i, ph_sel in enumerate(self.ph_streams)} for ich in range(self.nch)]
+    @property
+    def ph_streams_n_ph_dict(self):
+        return {stream:i for i, stream in enumerate(self.ph_streams)}
+    @property
+    def ph_streams_n_ph_inv_dict(self):
+        return {i:stream for i, stream in enumerate(self.ph_streams)}
     @property
     def nd_stream(self):
         """The Ph_sel object of donor emission after donor excitation"""
-        if 'ex' not in self._stream_map[0] or self._stream_map[0]['ex'] is None:
-            return Ph_sel('Dem')
-        else:
-            return Ph_sel('DexDem')
+        return Ph_sel('DexDem')
     @property
     def na_stream(self):
         """The Ph_sel object of acceptor emissino after donor excitation"""
-        if 'ex' not in self._stream_map[0] or self._stream_map[0]['ex'] is None:
-            return Ph_sel('Aem')
-        else:
-            return Ph_sel('DexAem')
+        return Ph_sel('DexAem')
 
     def __init__(self, leakage=0., gamma=1., dir_ex=0., **kwargs):
         # Default values
@@ -1160,7 +1104,7 @@ class Data(DataContainer):
     def _assert_compact(self, ph_sel):
         if not self.alternated:
             raise ValueError('Option compact=True requires ALEX data.')
-        if ph_sel.Dex is not None and ph_sel.Aex is not None:
+        if ph_sel == Ph_sel('all'):
             msg = ('Option compact=True requires a photon selection \n'
                    'from a single excitation period (either Dex or Aex).')
             raise ValueError(msg)
@@ -1169,13 +1113,13 @@ class Data(DataContainer):
         """Returns duration of alternation period outside selected excitation.
         """
         self._assert_compact(ph_sel)
-        if ph_sel.Aex is None:
-            excitation_range = self._D_ON_multich[ich]
-        elif ph_sel.Dex is None:
-            excitation_range = self._A_ON_multich[ich]
-        return _excitation_width(excitation_range, self.alex_period)
+        ex = union_multi(*[sel.ex for sel in ph_sel.streams])
+        if len(ex) != 1:
+            raise ValueError("Multiple excitation windows defined in ph_sel, can only return excitation width of singe excitation stream")
+        excitation_range = self.alt_ON[ich][ex[0]]
+        return _excitation_width(excitation_range, self.alex_period[ich])
 
-    def _ph_times_compact(self, ph, ph_sel):
+    def _ph_times_compact(self, ph, ph_sel, ich=0):
         """Return timestamps in one excitation period with "gaps" removed.
 
         It takes timestamps in the specified alternation period and removes
@@ -1193,8 +1137,8 @@ class Data(DataContainer):
         Returns:
             Array of timestamps in one excitation periods with "gaps" removed.
         """
-        excitation_width = self._excitation_width(ph_sel)
-        return _ph_times_compact(ph, self.alex_period, excitation_width)
+        excitation_width = self._excitation_width(ph_sel, ich=ich)
+        return _ph_times_compact(ph, self.alex_period[ich], excitation_width)
     # Todo: probably deprecate these private properties
     def _get_tuple_multich(self, name):
         """Get a n-element tuple field in multi-ch format (1 row per ch)."""
@@ -1202,6 +1146,44 @@ class Data(DataContainer):
         if field.ndim == 1:
             field = np.repeat([field], self.nch, axis=0)
         return field
+    
+    @property
+    def D_ON(self):
+        if np.all([alt_ON[0] == self.alt_ON[0][0] for alt_ON in self.alt_ON]):
+            D_ON = self.alt_ON[0][0]
+        else:
+            D_ON = [alt_ON[0] for alt_ON in self.alt_ON]
+        return D_ON
+    
+    @D_ON.setter
+    def D_ON(self, D_ON):
+        if isinstance(D_ON[0], int):
+            for i in range(self.nch):
+                self.alt_ON[i][0] = D_ON
+        elif isinstance(D_ON[0], (list, tuple)) and len(D_ON) == self.nch:
+            for i, d_on in enumerate(D_ON):
+                self.alt_ON[i][0] = d_on
+        else:
+            raise ValueError(f"Invalid D_ON definiition, must be 2-tuple of ints or list of 2 tuples of ints of length {self.nch}")
+
+    @property
+    def A_ON(self):
+        if np.all([alt_ON[1] == self.alt_ON[0][1] for alt_ON in self.alt_ON]):
+            A_ON = self.alt_ON[0][1]
+        else:
+            A_ON = [alt_ON[1] for alt_ON in self.alt_ON]
+        return A_ON
+    
+    @A_ON.setter
+    def A_ON(self, A_ON):
+        if isinstance(A_ON[0], int):
+            for i in range(self.nch):
+                self.alt_ON[i][1] = A_ON
+        elif isinstance(A_ON[0], (list, tuple)) and len(A_ON) == self.nch:
+            for i, a_on in enumerate(A_ON):
+                self.alt_ON[i][1] = a_on
+        else:
+            raise ValueError(f"Invalid A_ON definiition, must be 2-tuple of ints or list of 2 tuples of ints of length {self.nch}")
 
     @property
     def _D_ON_multich(self):
@@ -1224,8 +1206,9 @@ class Data(DataContainer):
         assert self.alternated
         D_ON = [self.alt_ON[ich][0] for ich in range(self.nch)]
         A_ON = [self.alt_ON[ich][1] for ich in range(self.nch)]
-        return ((A_ON[1] - A_ON[0]) /
-                (A_ON[1] - A_ON[0] + D_ON[1] - D_ON[0]))
+        return [((a_on[1] - a_on[0]) /
+                (a_on[1] - a_on[0] + d_on[1] - d_on[0])) 
+                for d_on, a_on in zip(D_ON, A_ON)]
     
     @property
     def _aex_dex_ratio(self):
@@ -1360,20 +1343,20 @@ class Data(DataContainer):
             :meth:`Data.burst_sizes_ich`
         """
         assert 'PAX' in self.meas_type
-        aex_dex_ratio = self._aex_dex_ratio
+        aex_dex_ratio = self._aex_dex_ratio[ich]
 
         bsize = 0
-        if ph_sel.Dex is not None and 'D' in ph_sel.Dex:
+        if Ph_sel('DexDem') in ph_sel:
             bsize += self.nd[ich] * gamma
-        if ph_sel.Aex is not None and 'D' in ph_sel.Aex:
+        if Ph_sel('AexDem') in ph_sel:
             bsize += self.nda[ich] * gamma
 
-        if ph_sel.Dex is not None and 'Aem' in ph_sel.Dex:
+        if Ph_sel('DexAem') in ph_sel:
             na_term = self.na[ich]
             if na_comp:
                 na_term = na_term * (1 + aex_dex_ratio)
             bsize += na_term
-        if ph_sel.Aex is not None and 'Aem' in ph_sel.Aex:
+        if Ph_sel('AexAem') in ph_sel:
             naa_term = self.naa[ich].copy()
             if naa_aexonly:
                 naa_term -= aex_dex_ratio * self.nar[ich]
@@ -1558,7 +1541,7 @@ class Data(DataContainer):
             gamma for single-spot data will raise an error.
         """
         if skip_ch is None:
-            skip_ch = []
+            skip_ch = tuple()
         dc = Data(**dict(self))
         mch_bursts = self.mburst
         mch_bursts = [bursts for i, bursts in enumerate(mch_bursts)
@@ -1572,21 +1555,21 @@ class Data(DataContainer):
         ich_burst = [i * np.ones(nb) for i, nb in enumerate(self.num_bursts)
                      if i not in skip_ch]
         dc.add(ich_burst=np.hstack(ich_burst)[indexsort])
-        str_orig = self._stream_map[0]
-        for str_map in self._stream_map[1:]:
-            if str_orig != str_map:
-                raise NotImplementedError("Collapsing channels with different photon assignment not implemented yet")
-        for alt_ON in self.alt_ON:
-            for i, alt_ex in enumerate(alt_ON):
-                for j, alt in enumerate(alt_ex):
-                    if alt != self.alt_ON[0][i][j]:
-                        raise RuntimeError("Connot collapse channels with different excitation periods")
+        if not dict_equal(*self._stream_map):
+            raise NotImplementedError("Collapsing channels with different photon assignment not implemented yet")
+        if hasattr(self, 'alt_ON'):
+            for alt_ON in self.alt_ON:
+                for i, alt_ex in enumerate(alt_ON):
+                    for j, alt in enumerate(alt_ex):
+                        if alt != self.alt_ON[0][i][j]:
+                            raise RuntimeError("Connot collapse channels with different excitation periods")
         for name in self.burst_fields:
             if name in self and name != 'mburst':
                 # Concatenate arrays along axis = 0
                 value = [x for i, x in enumerate(self[name])
                          if i not in skip_ch]
-                dc.add(**{name: [np.concatenate(value)[indexsort]]})
+                idxsort = tuple(slice(None) if i != value[0].ndim - 1 else indexsort for i in range(value[0].ndim))
+                dc.add(**{name: [np.concatenate(value, axis=value[0].ndim-1)[idxsort]]})
         dc.add(nch=1)
         dc.add(_chi_ch=1.)
         # NOTE: Updating gamma has the side effect of recomputing E
@@ -1646,7 +1629,7 @@ class Data(DataContainer):
     def bg_expand(self,ich=0, width=False):
         period = self.bp[ich]
         w = self.mburst[ich].width * self.clk_p
-        bg_exp = np.array([self.bg[ph_sel][ich][period] * w for ph_sel in self.ph_streams_str])
+        bg_exp = np.array([self.bg[ph_sel][ich][period] * w for ph_sel in self.ph_streams])
         if width:
             return bg_exp, w
         else:
@@ -1665,8 +1648,9 @@ class Data(DataContainer):
 
         width = self.mburst[ich].width * self.clk_p
         bursts['width_ms'] = width * 1e3
+        period = bursts['bg_period'] = self.bp[ich]
         for bg_key, bg_data in self.bg.items():
-            bursts['bg_' + bg_key] = bg_data
+            bursts['bg_' + bg_key.short_name] = bg_data[ich][period] * width
         burst_fields = self.burst_fields[:]
         burst_fields.remove('mburst')
         burst_fields.remove('bp')
@@ -1851,7 +1835,7 @@ class Data(DataContainer):
             raise ValueError('Wrong tail_min_us length (%d).' %
                              len(tail_min_us))
         th_us = {}
-        for i, key in enumerate(self.ph_streams_str + ['all']):
+        for i, key in enumerate(self.ph_streams + [Ph_sel('all')]):
             th_us[key] = np.ones(nperiods) * tail_min_us[i]
         # Save the input used to generate Th_us
         self.add(bg_th_us_user=tail_min_us)
@@ -1944,7 +1928,7 @@ class Data(DataContainer):
             self.add(bg_auto_th_us0=tail_min_us0, bg_auto_F_bg=F_bg)
             auto_th_kwargs = dict(clk_p=self.clk_p, tail_min_us=tail_min_us0)
             th_us = {}
-            for key in self.ph_streams_str + ['all']:
+            for key in self.ph_streams + [Ph_sel('all')]:
                 th_us[key] = np.zeros(nperiods)
         else:
             th_us = self._get_bg_th_arrays(tail_min_us, nperiods)
@@ -1957,13 +1941,13 @@ class Data(DataContainer):
         BG, BG_err = [], []
         Th_us = []
         for ich, ph_ch in enumerate(self.iter_ph_times()):
-            masks = {sel.__str__(): self.get_ph_mask(ich, ph_sel=sel)
+            masks = {sel: self.get_ph_mask(ich, ph_sel=sel)
                      for sel in self.ph_streams + [Ph_sel('all')]}
 
             counts, _ = np.histogram(ph_ch, bins=bins)
             lim, ph_p = [], []
-            bg = {sel: np.zeros(nperiods) for sel in self.ph_streams_str + ['all']}
-            bg_err = {sel: np.zeros(nperiods) for sel in self.ph_streams_str + ['all']}
+            bg = {sel: np.zeros(nperiods) for sel in self.ph_streams + [Ph_sel('all')]}
+            bg_err = {sel: np.zeros(nperiods) for sel in self.ph_streams + [Ph_sel('all')]}
             if ph_ch.size == 0:
                 Lim.append(lim)
                 Ph_p.append(ph_p)
@@ -1982,11 +1966,11 @@ class Data(DataContainer):
                 if fit_allph:
                     if bg_auto_th:
                         _bg, _ = fun(ph_i, **auto_th_kwargs)
-                        th_us['all'][ip] = 1e6 * F_bg / _bg
-                    bg['all'][ip], bg_err['all'][ip] = \
-                        fun(ph_i, tail_min_us=th_us['all'][ip], **kwargs)
+                        th_us[Ph_sel('all')][ip] = 1e6 * F_bg / _bg
+                    bg[Ph_sel('all')][ip], bg_err[Ph_sel('all')][ip] = \
+                        fun(ph_i, tail_min_us=th_us[Ph_sel('all')][ip], **kwargs)
 
-                for sel in self.ph_streams_str:
+                for sel in self.ph_streams:
                     ph_i_sel = ph_i[masks[sel][i0:i1]]
                     if ph_i_sel.size > 10:
                         if bg_auto_th:
@@ -1996,8 +1980,8 @@ class Data(DataContainer):
                             fun(ph_i_sel, tail_min_us=th_us[sel][ip], **kwargs)
 
             if not fit_allph:
-                bg['all'] += sum(bg[sel] for sel in self.ph_streams_str)
-                bg_err['all'] += sum(bg_err[sel] for sel in self.ph_streams_str)
+                bg[Ph_sel('all')] += sum(bg[sel] for sel in self.ph_streams)
+                bg_err[Ph_sel('all')] += sum(bg_err[sel] for sel in self.ph_streams)
             Lim.append(lim)
             Ph_p.append(ph_p)
             BG.append(bg)
@@ -2006,7 +1990,7 @@ class Data(DataContainer):
 
         # Make Dict Of Lists (DOL) from Lists of Dicts
         BG_dol, BG_err_dol, Th_us_dol = {}, {}, {}
-        for sel in self.ph_streams_str + ['all']:
+        for sel in self.ph_streams + [Ph_sel('all')]:
             BG_dol[sel] = [bg_ch[sel] for bg_ch in BG]
             BG_err_dol[sel] = [err_ch[sel] for err_ch in BG_err]
             Th_us_dol[sel] = [th_ch[sel] for th_ch in Th_us]
@@ -2084,7 +2068,7 @@ class Data(DataContainer):
             self.add(bg_auto_th_us0=tail_min_us0, bg_auto_F_bg=self.bg_F_bg)
             auto_th_kwargs = dict(clk_p=self.clk_p, tail_min_us=tail_min_us0)
             th_us = {}
-            for key in self.ph_streams_str + ['all']:
+            for key in self.ph_streams + [Ph_sel('all')]:
                 th_us[key] = np.zeros(nperiods)
         else:
             th_us = self._get_bg_th_arrays(tail_min_us, nperiods)
@@ -2122,16 +2106,15 @@ class Data(DataContainer):
             BG.append(bg)
             BG_err.append(bg_err)
             Th_us.append(th_us)
-
-        self.bg[ph_sel.__str__()] = BG
-        self.bg_err[ph_sel.__str__()] = BG_err
-        self.bg_th_us[ph_sel.__str__()] = Th_us
+        self.bg[ph_sel] = BG
+        self.bg_err[ph_sel] = BG_err
+        self.bg_th_us[ph_sel] = Th_us
         # Fill Lim and Ph_p with zeros for empty channels
         # This is needed for bg_calc_cache to be able to save data to disk
 
     @property
     def nperiods(self):
-        return len(self.bg[Ph_sel('all').__str__()][0])
+        return len(self.bg[Ph_sel('all')][0])
 
     @property
     def bg_mean(self):
@@ -2194,51 +2177,25 @@ class Data(DataContainer):
         """
         assert size(par) == 1 or size(par) == self.nch
         return np.repeat(par, self.nch) if size(par) == 1 else np.asarray(par)
-    # Todo: check if better way to handle ph_sel object
-    # def bg_from(self, ph_sel):
-    #     """Return the background rates for the specified photon selection.
-    #     """
-    #     ph_sel = self._fix_ph_sel(ph_sel)
-    #     if ph_sel in self.ph_streams:
-    #         return self.bg[ph_sel]
-    #     elif ph_sel == Ph_sel('DexDAem'):
-    #         sel = Ph_sel('DexDem'), Ph_sel('DexAem')
-    #         bg = [b1 + b2 for b1, b2 in zip(self.bg[sel[0]], self.bg[sel[1]])]
-    #     elif ph_sel == Ph_sel(Aex='DAem'):
-    #         sel = Ph_sel('AexDem'), Ph_sel('AexAem')
-    #         bg = [b1 + b2 for b1, b2 in zip(self.bg[sel[0]], self.bg[sel[1]])]
-    #     elif ph_sel == Ph_sel('DexDem', 'AexDem'):
-    #         sel = Ph_sel('DexDem'), Ph_sel('AexDem')
-    #         bg = [b1 + b2 for b1, b2 in zip(self.bg[sel[0]], self.bg[sel[1]])]
-    #     elif ph_sel == Ph_sel('DexAem', 'AexAem'):
-    #         sel = Ph_sel('DexAem'), Ph_sel('AexAem')
-    #         bg = [b1 + b2 for b1, b2 in zip(self.bg[sel[0]], self.bg[sel[1]])]
-    #     elif ph_sel == Ph_sel('DexDAem', 'AexAem'):
-    #         sel = (Ph_sel('DexDem'), Ph_sel('DexAem'), Ph_sel('AexAem'))
-    #         bg = [b1 + b2 + b3 for b1, b2, b3 in
-    #               zip(self.bg[sel[0]], self.bg[sel[1]], self.bg[sel[2]])]
-    #     else:
-    #         raise NotImplementedError('Photon selection %s not implemented.' %
-    #                                   str(ph_sel))
-    #     return bg
-
-    def bg_from(self, ph_sel,recalc=False):
-        if ph_sel.__str__() in self.bg:
-            return self.bg[ph_sel.__str__()]
+   
+    
+    def bg_from(self, ph_sel, recalc=False):
+        if ph_sel in self.bg:
+            return self.bg[ph_sel]
         elif recalc:
             self.calc_bg_stream(ph_sel)
-            return self.bg[ph_sel.__str__()]
+            return self.bg[ph_sel]
         else:
             bg = []
             for ich in range(self.nch):
                 indeces = ph_sel.get_det(self._stream_map[ich])
-                if indeces.size ==0:
+                if len(indeces) == 0:
                     raise NotImplementedError("An invald Ph_sel was specificed for this data set")
-                elif indeces.size ==1:
+                elif len(indeces) == 1:
                     raise ValueError("This Ph_sel was specified with one index, indicating probelm with the code, please raise an issue on GitHub")
-                bg_ich = self.bg[self.ph_streams_str_dict[ich][indeces[0]]][ich]
+                bg_ich = self.bg[self.ph_streams_dict[ich][indeces[0]]][ich]
                 for index in indeces[1:]:
-                    bg_ich += self.bg[self.ph_streams_str_dict[ich][index]][ich]
+                    bg_ich = bg_ich + self.bg[self.ph_streams_dict[ich][index]][ich]
                 bg.append(bg_ich)
             return bg
 
@@ -2354,7 +2311,7 @@ class Data(DataContainer):
     def _fix_mburst_from(self, ph_sel, mute=False):
         """Convert burst data from any ph_sel to 'all' timestamps selection.
         """
-        assert isinstance(ph_sel, Ph_sel) and ph_sel.__str__() != 'all'
+        assert isinstance(ph_sel, Ph_sel) and ph_sel != Ph_sel('all')
         pprint(' - Fixing  burst data to refer to ph_times_m ... ', mute)
 
         for bursts, mask in zip(self.mburst,
@@ -2578,21 +2535,27 @@ class Data(DataContainer):
                 n_ph[ich][i,:] = n_stream
         self.add(n_ph=n_ph)
         self.add(nt=[n_ich.sum(axis=0) for n_ich in n_ph])
+        if 'PAX' in self.meas_type:
+            # save a non leakage etc. corrected copy of na
+            self.nar = [na.copy() for na in self.na]
         self.add(bg_corrected=False, leakage_corrected=False,
                  dir_ex_corrected=False, dithering=False)
-    
+        
+    # TODO: handle 0 size arrays
     def n_phfrom(self,ph_sel,ich=0):
+        """Get photons per burst from input Ph_sel object per channel"""
         indeces = ph_sel.get_det(self._stream_map[ich])
-        if indeces.size > 1:
+        if len(indeces) > 1:
             id_map = np.array([self.ph_streams_n_ph_map[ich][index] for index in indeces])
             n_sel = self.n_ph[ich][id_map,:].sum(axis=0)
-        elif indeces.size == 1:
+        elif len(indeces) == 1:
             n_sel = self.n_ph[ich][self.ph_streams_n_ph_map[ich][indeces[0]],:]
+                
         return n_sel
     
     def n_phset(self,ph_sel,val,mask=slice(None),ich=0):
         indeces = ph_sel.get_det(self._stream_map[ich])
-        if indeces.size == 1:
+        if len(indeces) == 1:
             self.n_ph[ich][self.ph_streams_n_ph_map[ich][indeces[0]],mask] = val
         else:
             id_map = np.array([self.ph_streams_n_ph_map[ich][index] for index in indeces])
@@ -3128,25 +3091,24 @@ class Data(DataContainer):
             The list is also saved in `sbr` attribute.
         """
         sbr = []
-        for ich, mb, na, nd in enumerate(zip(self.mburst,self.nd, self.na)):
+        for ich, (mb, na, nd) in enumerate(zip(self.mburst,self.na, self.nd)):
             if mb.num_bursts == 0:
                 sbr.append(np.array([]))
                 continue  # if no bursts skip this ch
-            bg_d, bg_a = self.bg_stream(self.nd_stream), self.bg_stream(self.na_stream)
+            bg_d  = self.bg_stream(self.nd_stream, ich=ich)
+            bg_a = self.bg_stream(self.na_stream, ich=ich)
             nt = self.burst_sizes_ich(ich=ich, gamma=gamma)
+            signal = {Ph_sel('all'): nt,
+                      self.nd_stream: nd, self.na_stream: na}
 
-            signal = {Ph_sel('all').__str__(): nt,
-                      Ph_sel(self.nd_stream).__str__(): nd, Ph_sel(self.na_stream).__str__(): na}
+            background = {Ph_sel('all'): bg_d + bg_a, self.nd_stream: bg_d, self.na_stream: bg_a}
 
-            background = {Ph_sel('all').__str__(): bg_d + bg_a,
-                          Ph_sel(self.nd_stream).__str__(): bg_d, Ph_sel(self.na_stream).__str__(): bg_a}
-
-            sbr.append(signal[ph_sel.__str__()] / background[ph_sel.__str__()])
+            sbr.append(signal[ph_sel] / background[ph_sel])
         self.add(sbr=sbr)
         return sbr
 
     def calc_burst_ph_func(self, func, func_kw, ph_sel=Ph_sel('all'),
-                           compact=False, ich=0):
+                           compact=False):
         """Evaluate a scalar function from photons in each burst.
 
         This method allow calling an arbitrary function on the photon
@@ -3256,9 +3218,8 @@ class Data(DataContainer):
         if not pax:
             E = [na / (g * nd + na) for nd, na, g in zip(self.nd, self.na, G)]
         else:
-            adr = self._aex_dex_ratio
             E = [na * (1 + adr) / (g * (nd + nda) + na * (1 + adr))
-                 for nd, na, nda, g in zip(self.nd, self.na, self.nda, G)]
+                 for nd, na, nda, g, adr in zip(self.nd, self.na, self.nda, G, self._aex_dex_ratio)]
         self.add(E=E, pax=pax)
 
     def _calculate_stoich(self, pax=False):

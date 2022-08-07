@@ -200,8 +200,11 @@ def init_notebook(fs=13, seaborn_style='darkgrid',
         logger.addHandler(handler)
 
     if mpl_backend is not None:
-        ip = get_ipython()
-        ip.enable_matplotlib(mpl_backend)
+        try:
+            ip = get_ipython()
+            ip.enable_matplotlib(mpl_backend)
+        except:
+            warnings.war("No IPython available")
 
     import seaborn as sns
     if not apionly:
