@@ -563,11 +563,11 @@ def _get_bg_distrib_erlang(d, ich=0, m=10, ph_sel=Ph_sel('all'),
 
     # Compute the BG distribution
     if ph_sel == Ph_sel('all'):
-        bg_ph = d.bg_dd[ich] + d.bg_ad[ich]
+        bg_ph = d.bg_from(Ph_sel('DexDem'))[ich] + d.bg[Ph_sel('DexAem')][ich]
     elif ph_sel == Ph_sel('DexDem'):
-        bg_ph = d.bg_dd[ich]
+        bg_ph = d.bg_from(Ph_sel('DexDem'))[ich]
     elif ph_sel == Ph_sel('DexAem'):
-        bg_ph = d.bg_ad[ich]
+        bg_ph = d.bg_from(Ph_sel['DexAem'])[ich]
 
     rate_ch_kcps = bg_ph[period[0]:period[1]+1].mean()/1e3  # bg rate in kcps
     bg_dist = erlang(a=m, scale=1./rate_ch_kcps)

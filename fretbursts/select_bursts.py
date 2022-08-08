@@ -348,25 +348,25 @@ def consecutive(d, ich=0, th1=0, th2=np.inf, kind='both'):
 ## Selection on burst size vs BG
 def nd_bg(d, ich=0, F=5):
     """Select bursts with (nd >= bg_dd*F)."""
-    bg_burst = d.bg_dd[ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
+    bg_burst = d.bg_from(Ph_sel('DexDem'))[ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
     bursts_mask = (d.nd[ich] >= F*bg_burst)
     return bursts_mask, ''
 
 def na_bg(d, ich=0, F=5):
     """Select bursts with (na >= bg_ad*F)."""
-    bg_burst = d.bg_ad[ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
+    bg_burst = d.bg_from(Ph_sel('DexAem'))[d.bp[ich]] * d.mburst[ich].width * d.clk_p
     bursts_mask = (d.na[ich] >= F*bg_burst)
     return bursts_mask, ''
 
 def naa_bg(d, ich=0, F=5):
     """Select bursts with (naa >= bg_aa*F)."""
-    bg_burst = d.bg_aa[ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
+    bg_burst = d.bg_from(Ph_sel('AexAem'))[ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
     bursts_mask = (d.naa[ich] >= F*bg_burst)
     return bursts_mask, ''
 
 def nt_bg(d, ich=0, F=5):
     """Select bursts with (nt >= bg*F)."""
-    bg_burst = d.bg[ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
+    bg_burst = d.bg[Ph_sel('all')][ich][d.bp[ich]] * d.mburst[ich].width * d.clk_p
     bursts_mask = (d.nt[ich] > F*bg_burst)
     return bursts_mask, ''
 
@@ -400,7 +400,7 @@ def naa_bg_p(d, ich=0, P=0.05, F=1.):
 
 def nt_bg_p(d, ich=0, P=0.05, F=1.):
     """Select bursts w/ signal using P{F*BG>=nt} < P."""
-    bg_rate = d.rate_m[ich]
+    bg_rate = d.bg_mean[Ph_sel('all')][ich]
     bursts_width = _clk_to_s(d.mburst[ich].width)
     max_num_bg_ph = stats.poisson(F*bg_rate*bursts_width).isf(P)
     #print("Min num. ph = ", max_num_bg_ph)

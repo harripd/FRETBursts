@@ -827,6 +827,7 @@ class Data(DataContainer):
             return self._ph_streams_dict
     @property
     def ph_streams(self):
+        """The Ph_streams in the data, list in order found in n_ph, does not include Ph_sel('all')"""
         if hasattr(self,'_ph_streams'):
             return self._ph_streams
         else:
@@ -834,6 +835,7 @@ class Data(DataContainer):
             return self._ph_streams
     @property
     def ph_streams_str(self):
+        """List of string representations of ph_streams"""
         if hasattr(self,'_ph_streams_str'):
             return self._ph_streams_str
         else:
@@ -854,18 +856,23 @@ class Data(DataContainer):
         return [{val:key for key, val in self.ph_streams_dict[ich].items()} for ich in range(self.nch)]
     @property
     def stream_map(self):
+        """Dictionary defining the streams of each detector in det_m"""
         return self._stream_map
     @property
     def ph_streams_n_ph_map(self):
+        """Dictionary with keys as position in n_ph, and values as detector index in det_m"""
         return [{i:self.ph_streams_inv_dict[ich][ph_sel] for i, ph_sel in enumerate(self.ph_streams)} for ich in range(self.nch)]
     @property
     def ph_streams_n_ph_inv_map(self):
+        """Dictionary with keys as index in det_m, and values as position in n_ph"""
         return [{self.ph_streams_inv_dict[ich][ph_sel]:i for i, ph_sel in enumerate(self.ph_streams)} for ich in range(self.nch)]
     @property
     def ph_streams_n_ph_dict(self):
+        """Dict of key as Ph_sel, and value as index in n_ph"""
         return {stream:i for i, stream in enumerate(self.ph_streams)}
     @property
     def ph_streams_n_ph_inv_dict(self):
+        """ Dict of key as index in n_ph and value as Ph_sel"""
         return {i:stream for i, stream in enumerate(self.ph_streams)}
     @property
     def nd_stream(self):
@@ -1036,15 +1043,19 @@ class Data(DataContainer):
             yield self.get_nanotimes(ich=ich, ph_sel=ph_sel, compact=compact)
     @property
     def D_ex(self):
+        """Masks of Donor excitation photons"""
         return [self.get_ph_mask(ich=ich, ph_sel=Ph_sel(dict(ex=np.array([0],dtype=np.uint8)))) for ich in range(self.nch)]
     @property
     def A_ex(self):
+        """Masks of Acceptor excitation photons"""
         return [self.get_ph_mask(ich=ich, ph_sel=Ph_sel(dict(ex=np.array([1],dtype=np.uint8)))) for ich in range(self.nch)]
     @property
     def D_em(self):
+        """Masks of Donor emission photons"""
         return [self.get_ph_mask(ich=ich, ph_sel=Ph_sel(dict(em=np.array([0],dtype=np.uint8)))) for ich in range(self.nch)]
     @property
     def A_em(self):
+        """Masks of Acceptor emission photons"""
         return [self.get_ph_mask(ich=ich, ph_sel=Ph_sel(dict(em=np.array([1],dtype=np.uint8)))) for ich in range(self.nch)]
 
     def get_A_em(self, ich=0):
@@ -1149,6 +1160,10 @@ class Data(DataContainer):
     
     @property
     def D_ON(self):
+        """
+        The donor excitation period(s), if all are identical, will return [Dstart, Dstop]
+        Otherwise, will return list of [[Dstart0, Dstop0], [Dstart1, Dstop1] ...]
+        """
         if np.all([alt_ON[0] == self.alt_ON[0][0] for alt_ON in self.alt_ON]):
             D_ON = self.alt_ON[0][0]
         else:
@@ -1168,6 +1183,10 @@ class Data(DataContainer):
 
     @property
     def A_ON(self):
+        """
+        The acceptor excitation period(s), if all are identical, will return [Astart, Astop]
+        Otherwise, will return list of [[Astart0, Astop0], [Astart1, Astop1] ...]
+        """
         if np.all([alt_ON[1] == self.alt_ON[0][1] for alt_ON in self.alt_ON]):
             A_ON = self.alt_ON[0][1]
         else:
@@ -1184,7 +1203,7 @@ class Data(DataContainer):
                 self.alt_ON[i][1] = a_on
         else:
             raise ValueError(f"Invalid A_ON definiition, must be 2-tuple of ints or list of 2 tuples of ints of length {self.nch}")
-
+            
     @property
     def _D_ON_multich(self):
         return tuple(ich[0] for ich in self._get_tuple_multich('alt_ON'))
@@ -1195,10 +1214,12 @@ class Data(DataContainer):
 
     @property
     def _det_donor_accept_multich(self):
+        """Tuple of donor and acceptor streams in each spot"""
         return self._get_tuple_multich('det_spectral')
 
     @property
     def _det_p_s_pol_multich(self):
+        """Tuple of polarizations of in each excitation spot"""
         return self._get_tuple_multich('det_p_s_pol')
     @property
     def _aex_fraction(self):
@@ -1627,6 +1648,25 @@ class Data(DataContainer):
             return bg
     
     def bg_expand(self,ich=0, width=False):
+        """
+        Return background count rates of each burst in channel ich
+
+        Parameters
+        ----------
+        ich : int, optional
+            Excitation spot to return. The default is 0.
+        width : bool, optional
+            Whether or not to return burst widths. The default is False.
+
+        Returns
+        -------
+        bg_exp : np.ndarray
+            Expanded bg counts, same shape as n_ph
+        
+        w : np.ndarray, optional
+            Width of each burst
+
+        """
         period = self.bp[ich]
         w = self.mburst[ich].width * self.clk_p
         bg_exp = np.array([self.bg[ph_sel][ich][period] * w for ph_sel in self.ph_streams])
@@ -1723,63 +1763,68 @@ class Data(DataContainer):
         return ph_all[bursts_mask]
 
     ##
-    # Background analysis methods
+    # Deprecated Background analysis methodss
     #
-    def _obsolete_bg_attr(self, attrname, ph_sel):
-        print('The Data.%s attribute is deprecated. Please use '
-              'Data.bg(%s) instead.' % (attrname, repr(ph_sel)))
-        bg_attrs = ('bg_dd', 'bg_ad', 'bg_da', 'bg_aa')
-        bg_mean_attrs = ('rate_m', 'rate_dd', 'rate_ad', 'rate_da', 'rate_aa')
-        assert attrname in bg_attrs or attrname in bg_mean_attrs
-        if attrname in bg_attrs:
-            bg_field = 'bg'
-        elif attrname in bg_mean_attrs:
-            bg_field = 'bg_mean'
-        try:
-            value = getattr(self, bg_field)[ph_sel]
-        except AttributeError as e:
-            # This only happens when trying to access 'bg' because
-            # 'bg_mean' raises RuntimeError when missing.
-            msg = 'No attribute `%s` found. Please compute background first.'
-            raise_from(RuntimeError(msg % bg_field), e)
-        return value
+    # def _obsolete_bg_attr(self, attrname, ph_sel):
+    #     print('The Data.%s attribute is deprecated. Please use '
+    #           'Data.bg(%s) instead.' % (attrname, repr(ph_sel)))
+    #     bg_attrs = ('bg_dd', 'bg_ad', 'bg_da', 'bg_aa')
+    #     bg_mean_attrs = ('rate_m', 'rate_dd', 'rate_ad', 'rate_da', 'rate_aa')
+    #     assert attrname in bg_attrs or attrname in bg_mean_attrs
+    #     if attrname in bg_attrs:
+    #         bg_field = 'bg'
+    #     elif attrname in bg_mean_attrs:
+    #         bg_field = 'bg_mean'
+    #     try:
+    #         value = getattr(self, bg_field)[ph_sel]
+    #     except AttributeError as e:
+    #         # This only happens when trying to access 'bg' because
+    #         # 'bg_mean' raises RuntimeError when missing.
+    #         msg = 'No attribute `%s` found. Please compute background first.'
+    #         raise_from(RuntimeError(msg % bg_field), e)
+    #     return value
 
-    @property
-    def rate_m(self):
-        return self._obsolete_bg_attr('rate_m', Ph_sel('all'))
+    # @property
+    # def rate_m(self):
+    #     return self._obsolete_bg_attr('rate_m', Ph_sel('all'))
 
-    @property
-    def rate_dd(self):
-        return self._obsolete_bg_attr('rate_dd', Ph_sel('DexDem'))
+    # @property
+    # def rate_dd(self):
+    #     return self._obsolete_bg_attr('rate_dd', Ph_sel('DexDem'))
 
-    @property
-    def rate_ad(self):
-        return self._obsolete_bg_attr('rate_ad', Ph_sel('DexAem'))
+    # @property
+    # def rate_ad(self):
+    #     return self._obsolete_bg_attr('rate_ad', Ph_sel('DexAem'))
 
-    @property
-    def rate_da(self):
-        return self._obsolete_bg_attr('rate_da', Ph_sel('AexDem'))
+    # @property
+    # def rate_da(self):
+    #     return self._obsolete_bg_attr('rate_da', Ph_sel('AexDem'))
 
-    @property
-    def rate_aa(self):
-        return self._obsolete_bg_attr('rate_aa', Ph_sel('AexAem'))
+    # @property
+    # def rate_aa(self):
+    #     return self._obsolete_bg_attr('rate_aa', Ph_sel('AexAem'))
 
-    @property
-    def bg_dd(self):
-        return self._obsolete_bg_attr('bg_dd', Ph_sel('DexDem'))
+    # @property
+    # def bg_dd(self):
+    #     return self._obsolete_bg_attr('bg_dd', Ph_sel('DexDem'))
 
-    @property
-    def bg_ad(self):
-        return self._obsolete_bg_attr('bg_ad', Ph_sel('DexAem'))
+    # @property
+    # def bg_ad(self):
+    #     return self._obsolete_bg_attr('bg_ad', Ph_sel('DexAem'))
 
-    @property
-    def bg_da(self):
-        return self._obsolete_bg_attr('bg_da', Ph_sel('AexDem'))
+    # @property
+    # def bg_da(self):
+    #     return self._obsolete_bg_attr('bg_da', Ph_sel('AexDem'))
 
-    @property
-    def bg_aa(self):
-        return self._obsolete_bg_attr('bg_aa', Ph_sel('AexAem'))
-
+    # @property
+    # def bg_aa(self):
+    #     return self._obsolete_bg_attr('bg_aa', Ph_sel('AexAem'))
+    
+    
+    ##
+    # Background analysis methods
+    ##
+    
     def calc_bg_cache(self, fun, time_s=60, tail_min_us=500, F_bg=2,
                       error_metrics=None, fit_allph=True,
                       recompute=False):
@@ -2114,10 +2159,12 @@ class Data(DataContainer):
 
     @property
     def nperiods(self):
+        """Numer of background periods"""
         return len(self.bg[Ph_sel('all')][0])
 
     @property
     def bg_mean(self):
+        """Dictionary of mean background in each stream"""
         if 'bg' not in self:
             raise RuntimeError('No background found, compute it first.')
         if not hasattr(self, '_bg_mean'):
@@ -2180,6 +2227,35 @@ class Data(DataContainer):
    
     
     def bg_from(self, ph_sel, recalc=False):
+        """
+        Calculate the background of a certain Ph_sel. If recalc is False,
+        simply report sum of photon background rates in bg that compose the 
+        Ph_sel, otherwise, re-do the background calculation
+
+        Parameters
+        ----------
+        ph_sel : Ph_sel
+            The photon stream(s) over which to get the background rate.
+        recalc : bool, optional
+            Whether or not to recalculate the background rate or just return
+            relevant sum.
+            The default is False.
+
+        Raises
+        ------
+        NotImplementedError
+            Given Ph_sel contained greater definition than available from data
+            (for instance, tried to specify polarization when the dataset does not
+             contain polarization).
+        ValueError
+            Bug in code detected, raise issue of GitHub
+
+        Returns
+        -------
+        bg : numpy.ndarray
+            Background counts per period for given Ph_sel.
+
+        """
         if ph_sel in self.bg:
             return self.bg[ph_sel]
         elif recalc:
@@ -2525,6 +2601,12 @@ class Data(DataContainer):
     #              dir_ex_corrected=False, dithering=False)
     
     def calc_ph_num(self,pure_python=False):
+        """
+        Calculate photon number per stream, and place in attribute n_ph
+        
+        .. note::
+            Rarely called by user
+        """
         mch_count_ph_in_bursts = _get_mch_count_ph_in_bursts_func(pure_python)
         len(self.ph_streams)
         n_ph = [np.zeros((len(self.ph_streams),mb.num_bursts),dtype=float) for mb in self.mburst]
@@ -2554,6 +2636,29 @@ class Data(DataContainer):
         return n_sel
     
     def n_phset(self,ph_sel,val,mask=slice(None),ich=0):
+        """
+        Set values of photon counts in n_ph array
+        
+        .. note::
+            
+            Rarely called by user, mainly internal method
+
+        Parameters
+        ----------
+        ph_sel : Ph_sel
+            photon selection to set in _nph.
+        val : np.ndarray
+            Values to set.
+        mask : numpy mask or slice, optional
+            Indeces to set in n_ph. The default is slice(None).
+        ich : int, optional
+            Spot to set n_ph. The default is 0.
+
+        Returns
+        -------
+        None.
+
+        """
         indeces = ph_sel.get_det(self._stream_map[ich])
         if len(indeces) == 1:
             self.n_ph[ich][self.ph_streams_n_ph_map[ich][indeces[0]],mask] = val

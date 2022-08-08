@@ -1,9 +1,82 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# author: Paul David Harris
+# created: Aug 1 2022
 """
-Created on Mon Aug  1 17:33:05 2022
+This module is dedicated to handling and specifying *photon streams* in an abstract way.
+*Photon streams* are defined by the nature of the detector, and during which excitation 
+period the photon arrived, *photon streams*.
+While detectors are stored as simple indices, during conversion *to PhotonHDF5*
+the setup of the detectors was defined.
 
-@author: paul
+This assigns photons some of the following categories:
+
+=============    =============================================
+Detector type    Descrition
+=============    =============================================
+ex               excitation period (usually specrally defined)
+em               emmission spectral channel of arriving photon
+pol              Polarization of emission
+split            detector part of split channel
+=============    =============================================
+
+These streams are given integer indices. For *ex* and *em* these can be arbitrarily
+large to support 3+ color setups. 
+*pol* and *split* each can only be indexed as 0 or 1.
+
+For *ex/em* index 0 corresponds to Donor, and index 1 to Acceptor (for standard 2 color setups)
+For *pol* index 0 corresponds to parallel emission, and index 1 to perpendicular emission.
+
+To make code more readabe, *ex/em* and *pol* indices have default aliasses.
+
+=====   =====   ========
+Type    Index   Aliases
+=====   =====   ========
+ex/em   0       D
+ex/em   1       A
+pol     0       P or par
+pol     1       S or per
+=====   =====   ========
+
+Photon selectiosn are achieved through 2 classes, a base class the user usually doesn't
+interact with, and a wrapper class that is the general way of specifying and selecting
+photon streams.
+
+#. :class:`Ph_stream` the foundational photon selection class, which defines a set of detectors with certain traits in common
+#. :class:`Ph_sel` the higher level class, which allows any arbitrary selection of streams, by concatenating multiple :class:`Ph_stream` objects
+
+With :class:`Ph_sel` , any stream can be specified, and any combination can be specified.
+
+The synax is `[streamcode1]typecode1[streamcode2]typecode2...` ::
+    
+    PhDA = Ph_sel('DexAem')
+
+.. note::
+    
+    The above is the new form of specifying ::
+        
+        Ph_sel(Dex='Aem')
+    
+    from version 0.7
+
+
+Selections are defined by strings, and if you want the union of several selections
+you can specify multiple sub-streams by separating them with a single underscore::
+    
+    Ph_sel('DexDem_AexAem')
+    
+If any of the *ex*, *em*, *pol*, or *split* are not specified, then the selection
+will not disitinguish photons based on that stream.
+
+For instance::
+    
+    Ph_sel('Dex')
+    
+will take all photons during Donor excitation, regarless of whether they came in 
+the Donor or Acceptor emission channels, or polarization, or split.
+
+Finally, :class:`Ph_stream` and :class:`Ph_sel` are immutable and hashable, and 
+thus can be used as dictionary keys.
 """
 
 import re
@@ -89,6 +162,11 @@ def _fuse_splitpol(tup):
 
 
 class Ph_stream:
+    """
+    Base class defining a uniform set of of photon streams.
+    
+    Usually used only by :class:`Ph_sel`, and not by the user 
+    """
     __slots__ = ('__ex', '__em', '__pol', '__split', '__hash')
     @_check_kwargs
     def __init__(self, ex=None, em=None, pol=None, split=None):
@@ -139,22 +217,27 @@ class Ph_stream:
     
     @property
     def ex(self):
+        """Tuple of int representing the excitation channel(s) of selection"""
         return self.__ex
     
     @property
     def em(self):
+        """Tuple of int representing the emission spectral channel(s) of selection"""
         return self.__em
     
     @property
     def pol(self):
+        """Tuple indicating polarization, (0,) for parallel, (1,) for perpendicular, and None if both"""
         return self.__pol
     
     @property
     def split(self):
+        """Tuple (0,) (1,) for split channel or None if both"""
         return self.__split
     
     @property
     def Dex(self):
+        """Boolean if stream in incldued Donor excitation"""
         if self.__ex is None:
             return True
         else:
@@ -162,6 +245,7 @@ class Ph_stream:
     
     @property
     def Aex(self):
+        """Boolean if stream in incldued acceptor excitation"""
         if self.__ex is None:
             return True
         else:
@@ -169,6 +253,7 @@ class Ph_stream:
     
     @property
     def Dem(self):
+        """Boolean if stream in incldued Donor emission"""
         if self.__em is None:
             return True
         else:
@@ -176,6 +261,7 @@ class Ph_stream:
     
     @property
     def Aem(self):
+        """Boolean if stream in incldued Acceptor emission"""
         if self.__em is None:
             return True
         else:
@@ -183,11 +269,13 @@ class Ph_stream:
     
     @_check_kwargs
     def update(self, **kwargs):
+        """Return a new :class:`Ph_stream` merging input stream"""
         mkdict = {key:val for key, val in self}
         mkdict.update(**kwargs)
         return Ph_stream(**mkdict)
     
     def get_det(self, stream_map):
+        """Returns the detector indice(s) of :class:`Ph_stream` based on stream_map dictionary"""
         # get streams of importance
         try:
             streams = [np.concatenate([stream_map[stream][idx] for idx in idxs]) for stream, idxs in self]
@@ -202,6 +290,7 @@ class Ph_stream:
         return streams
     
     def get_mask(self, stream_map, dets):
+        """Returns mask of photons in dets of the stream in :class:`Ph_stream` based on stream_map dictionary"""
         mask = np.zeros(dets.shape, dtype=bool)
         for det in self.get_det(stream_map):
             mask += det == dets
@@ -292,6 +381,31 @@ def _comp_break(comp, subcnt0, subcnt1):
         
 
 def parallel_stream(sel0, sel1):
+    """
+    Identify if streams are "parallel" meaning they could be merged into a single
+    stream, and return dictioary specifying the union of thes treams
+
+    Parameters
+    ----------
+    sel0 : Ph_stream
+        First stream to compare.
+    sel1 : Ph_stream
+        First stream to compare.
+
+    Raises
+    ------
+    TypeError
+        Wrong data type given.
+
+    Returns
+    -------
+    par : bool
+        If streams are parallel or not, if True, then udict will represent the
+        merging of the two streams, otherwise, udict will include additional streams
+    udict : dict
+        dictionary the can be used as input to make new Ph_stream.
+
+    """
     if not np.all([isinstance(sel, Ph_stream) for sel in (sel0, sel1)]):
         raise TypeError(f"parallel_stream only take Ph_stream arguments, got {type(sel0)} and {type(sel1)}")
     comp, subcnt0, subcnt1, par = 0, 0, 0, True
@@ -314,6 +428,14 @@ def parallel_stream(sel0, sel1):
 
 
 class Ph_sel:
+    """
+    Class used to describe a selection of photons
+    Defined by a string, specifying index and type of index, repeated for as many
+    types of indices desired. Then for another non-paralllel definition, an 
+    underscore followed by the next definition.
+    
+    
+    """
     __slots__ = ("__streams", "__hash")
     def __init__(self, *args, **kwargs):
         if len(args) > 0 and len(kwargs) > 0:
@@ -380,21 +502,30 @@ class Ph_sel:
     
     @property
     def Dex(self):
+        """Bool if any stream includes Donor excitation"""
         return np.any([stream.Dex for stream in self.__streams])
     
     @property
     def Dem(self):
+        """Bool if any stream includes Donor emission"""
         return np.any([stream.Dem for stream in self.__streams])
     @property
     def Aex(self):
+        """Bool if any stream includes Acceptor excitation"""
         return np.any([stream.Aex for stream in self.__streams])
     
     @property
     def Aem(self):
+        """Bool if any stream includes Acceptor emission"""
         return np.any([stream.Dem for stream in self.__streams])
     
     @property
     def pol(self):
+        """Which polarization stream specified.
+        None indicates no polization ever selected,
+        False inidcates inconsistent polarization selected in streams
+        Otherwise (0,) for parallel, and (1,) for perpendicular
+        """
         pol = self.__streams[0].pol
         pols = [stream.pol == pol for stream in self.__streams]
         pol = pol[0] if pol is not None else None
@@ -404,6 +535,7 @@ class Ph_sel:
     
     @property
     def ex(self):
+        """Union of all excitation stream indices specified in all streams in this :calss:`Ph_sel`"""
         ex = tuple()
         for stream in self.__streams:
             ex = set(ex) | set(stream.ex)
@@ -411,6 +543,7 @@ class Ph_sel:
     
     @property
     def em(self):
+        """Union of all emmision stream indices specified in all streams in this :class:`Ph_sel`"""
         em = tuple()
         for stream in self.__streams:
             em = set(em) | set(stream.em)
@@ -418,10 +551,12 @@ class Ph_sel:
     
     @property
     def streams(self):
+        """List of Ph_stream objects that define the :class:`Ph_sel`"""
         return self.__streams
     
     @property
     def short_name(self):
+        """Short string representation of :class:`Ph_sel`, does not incldue full em/ex etc."""
         name = str()
         if np.any([stream == Ph_sel('all') for stream in self.__streams]):
             name = 'all'
@@ -438,10 +573,12 @@ class Ph_sel:
         return name
             
     def get_det(self, stream_map):
+        """Returns the detector indice(s) of :class:`Ph_sel` based on stream_map dictionary"""
         dets = union_multi(*[stream.get_det(stream_map) for stream in self.__streams])
         return tuple(dets)
     
     def get_mask(self, stream_map, dets):
+        """Returns mask of photons in dets of photons in :class:`Ph_sel` based on stream_map dictionary"""
         mask = np.zeros(dets.shape, dtype=bool)
         for det in self.get_det(stream_map):
             mask += det == dets
