@@ -12,9 +12,6 @@ Utility functions to print the HDF5 file structure and data-attributes are
 also provided.
 """
 
-from __future__ import print_function, absolute_import
-from builtins import range, zip
-
 import phconvert as phc
 
 

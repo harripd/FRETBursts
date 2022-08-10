@@ -7,7 +7,6 @@
 Functions to check the version of a repository by querying git.
 """
 
-from __future__ import print_function
 import os
 from distutils.spawn import find_executable
 from subprocess import check_output, call

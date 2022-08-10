@@ -11,8 +11,6 @@ This module contains functions for direct fitting of burst populations
 This module provides a standard interface for different fitting algorithms.
 """
 
-from __future__ import print_function, absolute_import
-from builtins import range, zip
 
 import numpy as np
 from scipy.stats import binom, expon

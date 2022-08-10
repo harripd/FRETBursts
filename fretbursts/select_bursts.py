@@ -20,9 +20,6 @@ specified selection criterium (`E` between 0.2 and 0.6 in this case).
 
 """
 
-from __future__ import print_function, absolute_import
-from builtins import range, zip
-
 import numpy as np
 from scipy import stats
 

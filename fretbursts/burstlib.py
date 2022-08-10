@@ -16,13 +16,8 @@ Furthermore it loads all the remaining **FRETBursts** modules (except for
 For usage example see the IPython Notebooks in sub-folder "notebooks".
 """
 
-from __future__ import print_function, absolute_import, division
-from future.utils import raise_from
-from builtins import range, zip
-
 import os
 import hashlib
-import numbers
 import numpy as np
 import copy
 from numpy import zeros, size, r_
@@ -1473,7 +1468,7 @@ class Data(DataContainer):
                       donor_ref=donor_ref)
         bsize_list = [self.burst_sizes_ich(ich, **kwargs) for ich in
                       range(self.nch)]
-        return np.array(bsize_list)
+        return bsize_list
 
     def iter_bursts_ph(self, ich=0):
         """Iterate over (start, stop) indexes to slice photons for each burst.

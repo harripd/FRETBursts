@@ -2,7 +2,6 @@
 Cython version of functions to compute photon rates.
 """
 
-from __future__ import division
 import numpy as np
 cimport numpy as np
 from libc.math cimport exp, fabs

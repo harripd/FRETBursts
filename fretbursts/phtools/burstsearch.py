@@ -53,9 +53,6 @@ duration minus `gap`, while `counts` is the total number of photons minus
 photons falling inside gaps (gaps are open intervals, do not include edges).
 """
 
-from __future__ import division, print_function
-from builtins import range, zip
-
 from collections import namedtuple
 import numpy as np
 import pandas as pd

@@ -9,9 +9,6 @@ GUI selection of a range in a matplotlib figure.
 Used by `hist2d_alex() and other functions in `burst_plot.py.
 """
 
-from __future__ import absolute_import
-from builtins import range, zip
-
 import numpy as np
 from scipy.stats import mode
 from matplotlib.patches import Rectangle, Ellipse

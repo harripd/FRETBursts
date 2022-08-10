@@ -116,9 +116,6 @@ Plan:
 
 """
 
-from __future__ import absolute_import
-from builtins import range, zip
-
 from pathlib import Path
 import json
 import numpy as np

@@ -7,7 +7,6 @@
 Misc utility functions
 """
 
-from __future__ import division, print_function
 import os
 import sys
 import numpy as np
@@ -131,8 +130,6 @@ def download_file(url, save_dir='./'):
         print('File already on disk: %s \nDelete it to re-download.' % path)
         return
 
-    from future.standard_library import install_aliases
-    install_aliases()
     from urllib.request import urlopen, urlretrieve
     from urllib.error import HTTPError, URLError
 

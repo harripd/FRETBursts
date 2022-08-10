@@ -14,9 +14,6 @@ to return a `Data()` object. The low-level functions that perform the binary
 loading and preprocessing can be found in the `dataload` folder.
 """
 
-from __future__ import print_function, absolute_import
-from builtins import range, zip
-
 import os
 import re
 import numpy as np
