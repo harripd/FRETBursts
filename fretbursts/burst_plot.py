@@ -1904,7 +1904,7 @@ def scatter_alex(d, i=0, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     plot(d.E[i], d.S[i], 'o', **plot_style)
     xlabel("E"); ylabel('S')
     plt.xlim(-0.2, 1.2); plt.ylim(-0.2, 1.2)
