@@ -28,7 +28,6 @@ Note:
 
 """
 
-from __future__ import division
 import numpy as np
 
 import phrates_c as cy

@@ -16,10 +16,6 @@ Furthermore it loads all the remaining **FRETBursts** modules (except for
 For usage example see the IPython Notebooks in sub-folder "notebooks".
 """
 
-from __future__ import print_function, absolute_import, division
-from future.utils import raise_from
-from builtins import range, zip
-
 import os
 import hashlib
 import numbers

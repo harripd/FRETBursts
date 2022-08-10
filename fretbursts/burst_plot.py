@@ -31,9 +31,6 @@ For more examples refer to
 
 """
 
-from __future__ import division, print_function, absolute_import
-from builtins import range
-
 import warnings
 from itertools import cycle
 
@@ -2255,13 +2252,8 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
             these custom attributes so that they can be plotted as an E-S
             histogram.
     Returns:
-        A ``seaborn.JointGrid`` object that can be used for tweaking the plot.
+        A ``matplotlib.figure.Figure`` object that can be used for tweaking the plot.
 
-    .. seealso::
-        The `Seaborn documentation <https://seaborn.pydata.org/>`__
-        has more info on plot customization:
-
-        * https://seaborn.pydata.org/generated/seaborn.JointGrid.html
     """
     #g = sns.JointGrid(x=d[E_name][i], y=d[S_name][i], ratio=3, space=0.2,
     #                  xlim=(-0.2, 1.2), ylim=(-0.2, 1.2))

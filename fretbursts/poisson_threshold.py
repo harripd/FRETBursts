@@ -17,8 +17,6 @@ Poisson process rate: lam or rate or bg_rate
 Time window duration: T
 Poisson distribution parameter: n = lam*T
 """
-from __future__ import print_function
-from builtins import range, zip
 
 import numpy as np
 from scipy.stats import poisson, chi2, erlang

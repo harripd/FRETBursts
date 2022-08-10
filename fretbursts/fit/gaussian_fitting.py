@@ -35,8 +35,6 @@ implemented but not thoroughly tested.
 The reference documentation for **all** the functions follows.
 """
 
-from __future__ import division, print_function, absolute_import
-
 import numpy as np
 import numpy.random as R
 import scipy.optimize as O
