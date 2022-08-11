@@ -15,6 +15,7 @@ from builtins import range, zip
 from collections import namedtuple
 import pytest
 import numpy as np
+from scipy.stats import norm
 
 try:
     import matplotlib
@@ -78,6 +79,9 @@ def load_fake_pax():
     d.calc_bg(bg.exp_fit, time_s=30, tail_min_us='auto')
     d.burst_search(L=10, m=10, F=6, pax=True)
     return d
+
+def normpdf(x, c=0, mu=0.5):
+    return np.exp(-(x-c)**2/((mu**2)*2))/(mu*np.sqrt(2*np.pi))
 
 
 @pytest.fixture(scope="module", params=[
@@ -1512,6 +1516,12 @@ def test_collapse(data_8ch):
             assert dc1.mburst[0] == dc2.mburst[0]
         else:
             assert np.allclose(dc1[name][0], dc2[name][0])
+
+def test_norm_pdf():
+    x = np.arange(0, 1, 0.01)
+    for c in np.arange(0.1, 1.0, 0.1):
+        for mu in np.logspace(np.log(5e-2)/np.log(10), np.log(0.5)/np.log(10), 10):
+            assert np.allclose(normpdf(x, c, mu), norm.pdf(x, loc=c, scale=mu))
 
 if __name__ == '__main__':
     pytest.main("-x -v fretbursts/tests/test_burstlib.py")
