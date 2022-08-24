@@ -5,6 +5,9 @@ dist: xenial
 python:
     - "3.6"
     - "3.7"
+    - "3.8"
+    - "3.9"
+    - "3.10"
 
 services:
   - xvfb
@@ -24,6 +27,7 @@ install:
     - conda install --yes phconvert
     - pip install pybroom
     - python setup.py build
+    - pip install pybroom
     - pip install .
     - rm -rf build/
 

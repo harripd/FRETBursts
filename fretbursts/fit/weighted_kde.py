@@ -10,8 +10,6 @@ This code borrows from a mods done by Zachary Pincus (zachary.pincus@yale.edu):
 http://mail.scipy.org/pipermail/scipy-user/2013-May/034580.html
 """
 
-from builtins import range, zip
-
 # Scipy imports.
 #from scipy import linalg, special
 from numpy import (atleast_2d, reshape, zeros, newaxis, dot, exp, pi, sqrt,)

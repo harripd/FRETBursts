@@ -53,9 +53,6 @@ duration minus `gap`, while `counts` is the total number of photons minus
 photons falling inside gaps (gaps are open intervals, do not include edges).
 """
 
-from __future__ import division, print_function
-from builtins import range, zip
-
 from collections import namedtuple
 import numpy as np
 import pandas as pd
@@ -551,24 +548,33 @@ class Bursts(object):
 
         # Go through the timestamps searching for start
         # and stop of each burst in order
+        sz = times_reduced.size
+        final_time = times_reduced[sz-1] 
         it = 0
+        warn = False
         for ib, burst in enumerate(self):
-            while times_reduced[it] != burst.start:
+            if final_time < burst.start:
+                raise Exception('Do not include all bursts')
+            while times_reduced[it] < burst.start:
                 it += 1
             out[ib].istart = it
             it_saved = it + 1
-
-            while times_reduced[it] != burst.stop:
+            if times_reduced[it] != burst.start:
+                warn= True
+            while times_reduced[it] < burst.stop:
                 it += 1
             # in case of repeated timestamps, istop needs to point
             # to the last of the repeats
-            while it < times_reduced.size and times_reduced[it] == burst.stop:
+            while it < sz and times_reduced[it] <= burst.stop:
                 it += 1
             out[ib].istop = it - 1
-
             # Done with current burst, before starting a new burst,
             # reset `it` to `istart+1`
             it = it_saved
+            if times_reduced[it] != burst.stop:
+                warn = True
+        if warn:
+            print('WARNING: reduced indexes did not inlcude origninal start and stop times, new bursts are shorter. This is expected if burst search was performed with differen ph_sel than the given times.')
         return out
 
     def and_gate(self, bursts2):

@@ -69,7 +69,7 @@ setup(name = project_name,
       description = ("Burst analysis toolkit for single and multi-spot "
                      "smFRET data."),
       long_description = long_description,
-      platforms = ('Windows', 'Linux', 'Mac OS X'),
+      platforms = ['Windows', 'Linux', 'Mac OS X'],
       classifiers=['Intended Audience :: Science/Research',
                    'Operating System :: OS Independent',
                    'Programming Language :: Python',

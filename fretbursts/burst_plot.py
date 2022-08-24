@@ -31,16 +31,13 @@ For more examples refer to
 
 """
 
-from __future__ import division, print_function, absolute_import
-from builtins import range
-
 import warnings
 from itertools import cycle
 
 # Numeric imports
 import numpy as np
 from numpy import arange, r_
-from matplotlib.mlab import normpdf
+from scipy.stats import norm as norm
 from scipy.stats import erlang
 from scipy.interpolate import UnivariateSpline
 
@@ -50,6 +47,10 @@ from matplotlib.pyplot import (plot, hist, xlabel, ylabel, grid, title, legend,
                                gca, gcf)
 from matplotlib.patches import Rectangle, Ellipse
 from matplotlib.collections import PatchCollection, PolyCollection
+from matplotlib.offsetbox import AnchoredText
+from matplotlib.gridspec import GridSpec
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 import seaborn as sns
 
 # Local imports
@@ -332,7 +333,7 @@ def _plot_rate_th(d, i, F, ph_sel, invert=False, scale=1,
     rate_th_style_ = dict(plot_style_)
     rate_th_style_.update(linestyle='--', label='auto')
     rate_th_style_.update(_normalize_kwargs(rate_th_style, kind='line2d'))
-    if rate_th_style_['label'] is 'auto':
+    if rate_th_style_['label'] == 'auto':
         rate_th_style_['label'] = 'bg_rate*%d %s' % \
                                   (F, plot_style_['label'])
     x_rate = np.hstack(d.Ph_p[i]) * d.clk_p
@@ -1018,8 +1019,8 @@ def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
                 a2 = (1-a1)
             elif d.fit_E_res.shape[1] == 6:
                 m1, s1, a1, m2, s2, a2 = d.fit_E_res[i, :]
-            y1 = a1*normpdf(x, m1, s1)
-            y2 = a2*normpdf(x, m2, s2)
+            y1 = a1*norm.pdf(x, m1, s1)
+            y2 = a2*norm.pdf(x, m2, s2)
             ax2.plot(x, scale*y1, ls='--', lw=lw, alpha=alpha, color=color)
             ax2.plot(x, scale*y2, ls='--', lw=lw, alpha=alpha, color=color)
         if fillcolor is None:
@@ -1592,7 +1593,7 @@ def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
         fit_style_ = dict(hist['plot_style_'])
         fit_style_.update(linestyle='-', marker='', label='auto')
         fit_style_.update(_normalize_kwargs(fit_style, kind='line2d'))
-        if fit_style_['label'] is 'auto':
+        if fit_style_['label'] == 'auto':
             plt_label = hist['plot_style_'].get('label', None)
             label = str(ph_sel) if plt_label is None else plt_label
             fit_style_['label'] = '%s, %.2f kcps' % (label, bg_rate * 1e-3)
@@ -1869,18 +1870,13 @@ def scatter_fret_size(d, i=0, which='all', gamma=1, add_naa=False,
     xlabel("FRET Efficiency (E)")
     ylabel("Corrected Burst size (#ph)")
 
-def scatter_fret_nd_na(d, i=0, show_fit=False, no_text=False, gamma=1.,
-                       **kwargs):
+def scatter_fret_nd_na(d, i=0, gamma=1., **kwargs):
     """Scatterplot of FRET versus gamma-corrected burst size."""
     default_kwargs = dict(mew=0, ms=3, alpha=0.3, color=blue)
     default_kwargs.update(**kwargs)
     plot(d.E[i], gamma*d.nd[i]+d.na[i], 'o', **default_kwargs)
     xlabel("FRET Efficiency (E)")
     ylabel("Burst size (#ph)")
-    if show_fit:
-        _fitted_E_plot(d, i, F=1., no_E=no_text, ax=gca())
-        if i == 0 and not no_text:
-            plt.figtext(0.4, 0.01, _get_fit_E_text(d), fontsize=14)
 
 def scatter_fret_width(d, i=0):
     """Scatterplot of FRET versus burst width."""
@@ -1908,7 +1904,7 @@ def scatter_alex(d, i=0, **kwargs):
     plot_style = dict(mew=1, ms=4, mec='black', color='purple',
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs))
+    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
     plot(d.E[i], d.S[i], 'o', **plot_style)
     xlabel("E"); ylabel('S')
     plt.xlim(-0.2, 1.2); plt.ylim(-0.2, 1.2)
@@ -2145,28 +2141,41 @@ def dplot(d, func, **kwargs):
 ##
 #  ALEX join-plot using seaborn
 #
-def _alex_plot_style(g, colorbar=True):
+def _alex_plot_style(g, colorbar=True,cmap=None, vmin=1, vmax=1000):
     """Set plot style and colorbar for an ALEX joint plot.
     """
-    g.set_axis_labels(xlabel="E", ylabel="S")
-    g.ax_marg_x.grid(True)
-    g.ax_marg_y.grid(True)
-    g.ax_marg_x.set_xlabel('')
-    g.ax_marg_y.set_ylabel('')
-    plt.setp(g.ax_marg_y.get_xticklabels(), visible=True)
-    plt.setp(g.ax_marg_x.get_yticklabels(), visible=True)
-    g.ax_marg_x.locator_params(axis='y', tight=True, nbins=3)
-    g.ax_marg_y.locator_params(axis='x', tight=True, nbins=3)
+    dummy, ax_joint, ax_x, ax_y = g.get_children()
+    ax_joint.set_xlabel("E")
+    ax_joint.set_ylabel("S")
+    ax_x.grid(True)
+    ax_y.grid(True)
+    ax_x.set_xlabel('')
+    ax_y.set_ylabel('')
+    plt.setp(ax_y.get_xticklabels(), visible=True)
+    plt.setp(ax_x.get_yticklabels(), visible=True)
+    plt.setp(ax_x.get_xticklabels(), visible=False)
+    plt.setp(ax_y.get_yticklabels(), visible=False)
+    ax_x.locator_params(axis='y', tight=True, nbins=3)
+    ax_y.locator_params(axis='x', tight=True, nbins=3)
     if colorbar:
-        pos = g.ax_joint.get_position().get_points()
-        X, Y = pos[:, 0], pos[:, 1]
-        cax = plt.axes([1., Y[0], (X[1] - X[0]) * 0.045, Y[1] - Y[0]])
-        plt.colorbar(cax=cax)
+        pos = ax_joint.get_position().get_points()
+        #X, Y = pos[:, 0], pos[:, 1]
+        #cax = plt.axes([1., Y[0], (X[1] - X[0]) * 0.045, Y[1] - Y[0]])
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        g.colorbar(ScalarMappable(norm=norm, cmap=cmap))
 
 
-def _hist_bursts_marg(arr, dx, i, E_name='E', S_name='S', **kwargs):
+def _hist_bursts_marg( dx, i, E_name='E', S_name='S', **kwargs):
     """Wrapper to call hist_burst_data() from seaborn plot_marginals().
     """
+    if 'orientation' in kwargs and not('vertical' in kwargs):
+        if kwargs['orientation'] == 'vertical':
+            kwargs.update({'vertical':False})
+        elif kwargs['orientation'] == 'horizontal':
+            kwargs.update({'vertical':True})
+        kwargs.pop('orientation')
+    elif 'orientation' in kwargs and 'vertical' in kwargs:
+        raise Exception("cannot supply both orientation and vertical keyword arguments")
     vertical = kwargs.get('vertical', False)
     data_name = S_name if vertical else E_name
     hist_burst_data(dx, i=i, data_name=data_name, **kwargs)
@@ -2223,7 +2232,7 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
         vmax (int or None): max value in the histogram mapped by the colormap.
             When None, vmax is computed automatically from the data and
             dependes on the argument `vmax_fret`. Default `None`.
-        joint_kws (dict): keyword arguments passed to the function with plots
+        joint_kws (dict): keyword arguments passed to the function which plots
             the inner 2-D distribution (i.e matplotlib scatter or hexbin or
             seaborn kdeplot).
             and hence to matplolib hexbin to customize the plot style.
@@ -2243,17 +2252,17 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
             these custom attributes so that they can be plotted as an E-S
             histogram.
     Returns:
-        A ``seaborn.JointGrid`` object that can be used for tweaking the plot.
+        A ``matplotlib.figure.Figure`` object that can be used for tweaking the plot.
 
-    .. seealso::
-        The `Seaborn documentation <https://seaborn.pydata.org/>`__
-        has more info on plot customization:
-
-        * https://seaborn.pydata.org/generated/seaborn.JointGrid.html
     """
-    g = sns.JointGrid(x=d[E_name][i], y=d[S_name][i], ratio=3, space=0.2,
-                      xlim=(-0.2, 1.2), ylim=(-0.2, 1.2))
-
+    #g = sns.JointGrid(x=d[E_name][i], y=d[S_name][i], ratio=3, space=0.2,
+    #                  xlim=(-0.2, 1.2), ylim=(-0.2, 1.2))
+    g = plt.figure(figsize=(7,7))
+    gs = GridSpec(figure=g,nrows=4,ncols=4)
+    ax_joint = g.add_subplot(gs[1:4,0:3])
+    ax_horiz = g.add_subplot(gs[0,0:3],sharex=ax_joint)
+    ax_verti = g.add_subplot(gs[1:4,3],sharey=ax_joint)
+    
     if isinstance(marginal_color, int):
         histcolor = sns.color_palette(cmap, 100)[marginal_color]
     else:
@@ -2261,7 +2270,7 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
     marginal_kws_ = dict(
         show_kde=True, bandwidth=0.03, binwidth=0.03,
         hist_bar_style={'facecolor': histcolor, 'edgecolor': 'k',
-                        'linewidth': 0.15, 'alpha': 1})
+                        'linewidth': 0.15, 'alpha': 1, })
     if marginal_kws is not None:
         marginal_kws_.update(_normalize_kwargs(marginal_kws))
 
@@ -2269,34 +2278,41 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
         joint_kws_ = dict(s=40, color=histcolor, alpha=0.1, linewidths=0)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = g.plot_joint(plt.scatter, **joint_kws_)
+        jplot = ax_joint.scatter(d[E_name][i], d[S_name][i], **joint_kws_)
     elif kind.startswith('hex'):
         joint_kws_ = dict(edgecolor='none', linewidth=0.2, gridsize=gridsize,
                           cmap=cmap, extent=(-0.2, 1.2, -0.2, 1.2), mincnt=1)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = g.plot_joint(plt.hexbin, **joint_kws_)
+        jplot = ax_joint.hexbin(d[E_name][i], d[S_name][i], **joint_kws_)
 
         # Set the vmin and vmax values for the colormap
-        polyc = [c for c in jplot.ax_joint.get_children()
-                 if isinstance(c, PolyCollection)][0]
         if vmax is None:
-            vmax = _alex_hexbin_vmax(polyc, vmax_fret=vmax_fret)
-        polyc.set_clim(vmin, vmax)
+            vmax = _alex_hexbin_vmax(jplot, vmax_fret=vmax_fret)
+        jplot.set_clim(vmin, vmax)
     elif kind.startswith("kde"):
         joint_kws_ = dict(shade=True, shade_lowest=False, n_levels=30,
                           cmap=cmap, clip=(-0.4, 1.4), bw=0.03)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = g.plot_joint(sns.kdeplot, **joint_kws_)
-    g.ax_joint.set_xlim(-0.19, 1.19)
-    g.ax_joint.set_xlim(-0.19, 1.19)
-    g.plot_marginals(_hist_bursts_marg, dx=d, i=i, E_name=E_name, S_name=S_name,
-                     **marginal_kws_)
-    g.annotate(lambda x, y: x.size, stat='# Bursts',
-               template='{stat}: {val}', frameon=False)
+        jplot = sns.kdeplot(x=d[E_name][0], y= d[S_name][0], ax=ax_joint, 
+                            **joint_kws_)
+    anno_str = ''
+    for mburst in d.mburst:
+        anno_str = anno_str + f'# Bursts: {mburst.size}\n'
+    anno_box = AnchoredText(anno_str,loc='upper right',frameon=False)
+    ax_joint.add_artist(anno_box)
+    ax_joint.set_xlim(-0.19, 1.19)
+    ax_joint.set_xlim(-0.19, 1.19)
+    _hist_bursts_marg(d, i, E_name=E_name, S_name=S_name, ax = ax_horiz,
+                     vertical = False, **marginal_kws_)
+    _hist_bursts_marg(d, i, E_name=E_name, S_name=S_name, ax = ax_verti,
+                     vertical = True, **marginal_kws_)
+#    (lambda x, y: x.size, stat='# Bursts',
+#               template='{stat}: {val}', frameon=False)
     colorbar = kind.startswith('hex')
-    _alex_plot_style(g, colorbar=colorbar)
+    _alex_plot_style(g, colorbar=colorbar, cmap=jplot.cmap if
+                     kind.startswith('hex') else None, vmin=vmin, vmax=vmax)
     if rightside_text:
         plt.text(1.15, 0.6, d.name, transform=g.fig.transFigure, fontsize=14,
                  bbox=dict(edgecolor='r', facecolor='none', lw=1.3, alpha=0.5))

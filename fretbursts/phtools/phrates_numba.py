@@ -2,7 +2,6 @@
 Numba-optimized version of functions to compute KDE-based photon rates.
 """
 
-from __future__ import division
 import numpy as np
 import numba
 from math import exp, fabs

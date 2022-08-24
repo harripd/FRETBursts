@@ -16,17 +16,13 @@ Furthermore it loads all the remaining **FRETBursts** modules (except for
 For usage example see the IPython Notebooks in sub-folder "notebooks".
 """
 
-from __future__ import print_function, absolute_import, division
-from future.utils import raise_from
-from builtins import range, zip
-
 import os
 import hashlib
 import numbers
 import numpy as np
 import copy
 from numpy import zeros, size, r_
-import scipy.stats as SS
+from scipy.stats import norm
 
 from .utils.misc import pprint, clk_to_s, deprecate
 from .poisson_threshold import find_optimal_T_bga
@@ -199,7 +195,7 @@ def iter_bursts_ph(ph_data, bursts, mask=None, compact=False,
         yield ph
 
 def bursts_ph_list(ph_data, bursts, mask=None):
-    """Returna list of ph-data for each burst.
+    """Return a list of ph-data for each burst.
 
     ph_data can be either the timestamp array on which the burst search
     has been performed or any other array with same size (boolean array,
@@ -1574,7 +1570,7 @@ class Data(DataContainer):
             # This only happens when trying to access 'bg' because
             # 'bg_mean' raises RuntimeError when missing.
             msg = 'No attribute `%s` found. Please compute background first.'
-            raise_from(RuntimeError(msg % bg_field), e)
+            raise RuntimeError(msg % bg_field)
         return value
 
     @property
@@ -3000,7 +2996,7 @@ class Data(DataContainer):
                 np.dot(w, (E[mask] - fit_res[ich, 0])**2)/w.sum())
             fit_model_F[ich] = mask.sum()/mask.size
 
-        fit_model = lambda x, p: SS.norm.pdf(x, p[0], p[1])
+        fit_model = lambda x, p: norm.pdf(x, p[0], p[1])
         self.add(fit_E_res=fit_res, fit_E_name='Moments',
                  E_fit=fit_res[:, 0], fit_E_curve=True, fit_E_E1=E1,
                  fit_E_E2=E2, fit_E_model=fit_model,
@@ -3095,7 +3091,7 @@ class Data(DataContainer):
             For EM fitting use :meth:`fit_E_two_gauss_EM()`.
         """
         if fit_fun.__name__.startswith("gaussian_fit"):
-            fit_model = lambda x, p: SS.norm.pdf(x, p[0], p[1])
+            fit_model = lambda x, p: norm.pdf(x, p[0], p[1])
             if 'mu0' not in fit_kwargs: fit_kwargs.update(mu0=0.5)
             if 'sigma0' not in fit_kwargs: fit_kwargs.update(sigma0=0.3)
             iE, nparam = 0, 2
