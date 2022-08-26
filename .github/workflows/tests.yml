@@ -36,11 +36,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install wheel
-          python -m pip install pytest cython numpy scipy pandas matplotlib numba jupyter nbconvert seaborn tables phconvert lmfit pybroom
+          python -m pip install cython scipy pandas matplotlib lmfit cython numba nbconvert pytest ipykernel ipywidgets seaborn terminado
+          pythom -m pip install phconvert lmfit pybroom
       - name: Install project
         run: |
           python setup.py sdist
-          pip install .
+          python -m pip install .
+          python setup.py clean --all
       - name: Test project
         run: |
           python fretbursts/tests/nbrun.py notebooks
