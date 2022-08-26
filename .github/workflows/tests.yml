@@ -25,6 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest numpy cython pandas matplotlib seaborn lmfit tables phconvert
+          python -m pip install pytest wheel cython numpy scipy pandas matplotlib numba nbconvert ipython seaborn tables phconvert lmfit pybroom
+          python setup.py sdist bdist_wheel
       - name: Test project
         run: python -m pytest
