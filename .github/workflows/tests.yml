@@ -39,5 +39,5 @@ jobs:
           cd ../..
       - name: Test project
         run: |
-          python ../fretbursts/tests/nbrun.py
+          python fretbursts/tests/nbrun.py
           python -m pytest
