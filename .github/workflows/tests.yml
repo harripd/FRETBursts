@@ -30,8 +30,8 @@ jobs:
       - name: Downlaod files Windows
         if: runner.os == 'Windows'
         run: |
-          curl.exe  --ouput 2182604/12d_New_30p_320mW_steer_3.hdf5 --url http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
-          curl.exe --ouput 0023uLRpitc_NTP_20dT_0.5GndCl.hdf5 --url http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
+          curl.exe --output 2182604/12d_New_30p_320mW_steer_3.hdf5 --url http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
+          curl.exe --output 0023uLRpitc_NTP_20dT_0.5GndCl.hdf5 --url http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
