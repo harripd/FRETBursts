@@ -39,8 +39,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
-          wget -N http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
+          client = new-object System.Net.WebClient
+          client.DownloadFile(-N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5)
+          client.DownloadFIle(http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5)
       - name: Test project
         run: |
           python fretbursts/tests/nbrun.py notebooks
