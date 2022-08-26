@@ -22,6 +22,19 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{matrix.python-version}}
+      - name: Download files Unix
+        if: runner.os != 'Windows'
+        run: |
+          wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
+          wget -N http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
+      - name: Downlaod files Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          client = new-object System.Net.WebClient
+          client.DownloadFile(-N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5)
+          client = new-object System.Net.WebClient
+          client.DownloadFIle(http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5)
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -30,18 +43,6 @@ jobs:
         run: |
           python setup.py sdist
           pip install .
-      - name: Download files
-        if: runner.os != 'Windows'
-        run: |
-          wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
-          wget -N http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
-      - name: Downlaod files
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          client = new-object System.Net.WebClient
-          client.DownloadFile(-N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5)
-          client.DownloadFIle(http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5)
       - name: Test project
         run: |
           python fretbursts/tests/nbrun.py notebooks
