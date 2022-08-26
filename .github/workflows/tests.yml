@@ -31,12 +31,12 @@ jobs:
           python setup.py sdist bdist_wheel
           pip install .
       - name: Download files
-        if: ${{matrix.os != windows-latest}}
+        if: runner.os != 'Windows'
         run: |
           wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
           wget -N http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
       - name: Downlaod files
-        if: ${{matrix.os == 'windows-latest'}}
+        if: matrix.os == 'Windows'
         shell: pwsh
         run: |
           wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
