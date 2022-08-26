@@ -42,7 +42,6 @@ jobs:
         run: |
           python setup.py sdist
           python -m pip install .
-          python setup.py clean --all
       - name: Test project
         run: |
           python fretbursts/tests/nbrun.py notebooks
