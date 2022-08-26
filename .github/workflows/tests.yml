@@ -37,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install wheel
           python -m pip install cython scipy pandas matplotlib lmfit cython numba nbconvert pytest ipykernel ipywidgets seaborn terminado
-          python -m pip install ipython phconvert lmfit pybroom
+          python -m pip install ipython nbformat phconvert lmfit pybroom
       - name: Install project
         run: |
           python setup.py sdist
