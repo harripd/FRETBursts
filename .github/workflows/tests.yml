@@ -45,4 +45,4 @@ jobs:
       - name: Test project
         run: |
           python fretbursts/tests/nbrun.py notebooks
-          python -m pytest
+          pytest
