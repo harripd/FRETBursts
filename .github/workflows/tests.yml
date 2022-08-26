@@ -26,6 +26,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pytest wheel cython numpy scipy pandas matplotlib numba nbconvert ipython seaborn tables phconvert lmfit pybroom
+      - name: Install project
+        run: |
           python setup.py sdist bdist_wheel
+          pip install .
+      - name: Download files
+        run: |
+          mkdir notebooks/data
+          cd notebooks/data
+          wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
+          wget -N http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
+          cd ../..
       - name: Test project
-        run: python -m pytest
+        run: |
+          python ../fretbursts/tests/nbrun.py
+          python -m pytest
