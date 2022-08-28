@@ -14,9 +14,9 @@ jobs:
     strategy:
       matrix:
 #         os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest]
 #         python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.6"]
 
     steps:
       - uses: actions/checkout@v3
@@ -41,7 +41,7 @@ jobs:
           python -m pip install pytest cython numpy scipy pandas matplotlib seaborn
       - name: Install project
         run: |
-          python -m pip install ipython nbconert lmfit phconvert pybroom
+          python -m pip install ipython nbconvert lmfit phconvert pybroom
           python setup.py sdist
           python -m pip install .
       - name: Test project
