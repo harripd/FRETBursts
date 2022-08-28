@@ -32,9 +32,13 @@ jobs:
         run: |
           curl.exe --output 2182604/12d_New_30p_320mW_steer_3.hdf5 --url http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
           curl.exe --output 0023uLRpitc_NTP_20dT_0.5GndCl.hdf5 --url http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
-      - name: Install dependencies
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+      - name: Install pywinpty
+        if: runner.os == 'Windows'
+        run: python -m pywinpty
+      - name: Install Dependencies
         run: |
-          python -m pip install --upgrade pip
           python -m pip install wheel
           python -m pip install cython scipy pandas matplotlib lmfit cython numba nbconvert pytest ipykernel ipywidgets seaborn terminado
           python -m pip install ipython jupyter nbformat phconvert lmfit pybroom
