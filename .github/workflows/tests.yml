@@ -36,7 +36,7 @@ jobs:
         run: python -m pip install --upgrade pip
       - name: Install pywinpty
         if: runner.os == 'Windows'
-        run: python -m pywinpty
+        run: python -m pip install pywinpty
       - name: Install Dependencies
         run: |
           python -m pip install wheel
