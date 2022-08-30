@@ -1757,69 +1757,7 @@ class Data(DataContainer):
         bursts_mask = self.ph_in_bursts_mask_ich(ich, ph_sel)
         return ph_all[bursts_mask]
 
-    ##
-    # Deprecated Background analysis methodss
-    #
-    # def _obsolete_bg_attr(self, attrname, ph_sel):
-    #     print('The Data.%s attribute is deprecated. Please use '
-    #           'Data.bg(%s) instead.' % (attrname, repr(ph_sel)))
-    #     bg_attrs = ('bg_dd', 'bg_ad', 'bg_da', 'bg_aa')
-    #     bg_mean_attrs = ('rate_m', 'rate_dd', 'rate_ad', 'rate_da', 'rate_aa')
-    #     assert attrname in bg_attrs or attrname in bg_mean_attrs
-    #     if attrname in bg_attrs:
-    #         bg_field = 'bg'
-    #     elif attrname in bg_mean_attrs:
-    #         bg_field = 'bg_mean'
-    #     try:
-    #         value = getattr(self, bg_field)[ph_sel]
-    #     except AttributeError as e:
-    #         # This only happens when trying to access 'bg' because
-    #         # 'bg_mean' raises RuntimeError when missing.
-    #         msg = 'No attribute `%s` found. Please compute background first.'
-    #         raise_from(RuntimeError(msg % bg_field), e)
-    #     return value
 
-    # @property
-    # def rate_m(self):
-    #     return self._obsolete_bg_attr('rate_m', Ph_sel('all'))
-
-    # @property
-    # def rate_dd(self):
-    #     return self._obsolete_bg_attr('rate_dd', Ph_sel('DexDem'))
-
-    # @property
-    # def rate_ad(self):
-    #     return self._obsolete_bg_attr('rate_ad', Ph_sel('DexAem'))
-
-    # @property
-    # def rate_da(self):
-    #     return self._obsolete_bg_attr('rate_da', Ph_sel('AexDem'))
-
-    # @property
-    # def rate_aa(self):
-    #     return self._obsolete_bg_attr('rate_aa', Ph_sel('AexAem'))
-
-    # @property
-    # def bg_dd(self):
-    #     return self._obsolete_bg_attr('bg_dd', Ph_sel('DexDem'))
-
-    # @property
-    # def bg_ad(self):
-    #     return self._obsolete_bg_attr('bg_ad', Ph_sel('DexAem'))
-
-    # @property
-    # def bg_da(self):
-    #     return self._obsolete_bg_attr('bg_da', Ph_sel('AexDem'))
-
-    # @property
-    # def bg_aa(self):
-    #     return self._obsolete_bg_attr('bg_aa', Ph_sel('AexAem'))
-    
-    
-    ##
-    # Background analysis methods
-    ##
-    
     def calc_bg_cache(self, fun, time_s=60, tail_min_us=500, F_bg=2,
                       error_metrics=None, fit_allph=True,
                       recompute=False):
@@ -2523,77 +2461,6 @@ class Data(DataContainer):
             pprint(" - Computing max rates in burst ...", mute)
             self.calc_max_rate(m=self.m)
             pprint("[DONE]\n", mute)
-
-    # Todo: correct for new Ph_sel / det_m system
-    # def calc_ph_num(self, alex_all=False, pure_python=False):
-    #     """Computes number of D, A (and AA) photons in each burst.
-
-    #     Arguments:
-    #         alex_all (bool): if True and self.ALEX is True, computes also the
-    #             donor channel photons during acceptor excitation (`nda`)
-    #         pure_python (bool): if True, uses the pure python functions even
-    #             when the optimized Cython functions are available.
-
-    #     Returns:
-    #         Saves `nd`, `na`, `nt` (and eventually `naa`, `nda`) in self.
-    #         Returns None.
-    #         ## change to single n_ph array, with rows equivalent to ph_streams
-    #     """
-    #     mch_count_ph_in_bursts = _get_mch_count_ph_in_bursts_func(pure_python)
-
-    #     if not self.alternated:
-    #         nt = [b.counts.astype(float) if b.num_bursts > 0 else np.array([])
-    #               for b in self.mburst]
-    #         A_em = [self.get_A_em(ich) for ich in range(self.nch)]
-    #         if isinstance(A_em[0], slice):
-    #             # This is to support the case of A-only or D-only data
-    #             n0 = [np.zeros(mb.num_bursts) for mb in self.mburst]
-    #             if A_em[0] == slice(None):
-    #                 nd, na = n0, nt    # A-only case
-    #             elif A_em[0] == slice(0):
-    #                 nd, na = nt, n0    # D-only case
-    #         else:
-    #             # This is the usual case with photons in both D and A channels
-    #             na = mch_count_ph_in_bursts(self.mburst, A_em)
-    #             nd = [t - a for t, a in zip(nt, na)]
-    #         assert (nt[0] == na[0] + nd[0]).all()
-    #     else:
-    #         # The "new style" would be:
-    #         #Mask = [m for m in self.iter_ph_masks(Ph_sel(Dex='Dem'))]
-    #         Mask = [d_em * d_ex for d_em, d_ex in zip(self.D_em, self.D_ex)]
-    #         nd = mch_count_ph_in_bursts(self.mburst, Mask)
-
-    #         Mask = [a_em * d_ex for a_em, d_ex in zip(self.A_em, self.D_ex)]
-    #         na = mch_count_ph_in_bursts(self.mburst, Mask)
-
-    #         Mask = [a_em * a_ex for a_em, a_ex in zip(self.A_em, self.A_ex)]
-    #         naa = mch_count_ph_in_bursts(self.mburst, Mask)
-    #         self.add(naa=naa)
-
-    #         if alex_all or 'PAX' in self.meas_type:
-    #             Mask = [d_em * a_ex for d_em, a_ex in zip(self.D_em, self.A_ex)]
-    #             nda = mch_count_ph_in_bursts(self.mburst, Mask)
-    #             self.add(nda=nda)
-
-    #         if self.ALEX:
-    #             nt = [d + a + aa for d, a, aa in zip(nd, na, naa)]
-    #             assert (nt[0] == na[0] + nd[0] + naa[0]).all()
-    #         elif 'PAX' in self.meas_type:
-    #             nt = [d + a + da + aa for d, a, da, aa in zip(nd, na, nda, naa)]
-    #             assert (nt[0] == na[0] + nd[0] + nda[0] + naa[0]).all()
-    #             # This is a copy of na which will never be corrected
-    #             # (except for background). It is used to compute the
-    #             # equivalent of naa for PAX:
-    #             #   naa~ = naa - nar
-    #             # where naa~ is the A emission due to direct excitation
-    #             # by A laser during D+A-excitation,
-    #             # nar is the uncorrected A-channel signal during D-excitation,
-    #             # and naa is the A-channel signal during D+A excitation.
-    #             nar = [a.copy() for a in na]
-    #             self.add(nar=nar)
-    #     self.add(nd=nd, na=na, nt=nt,
-    #              bg_corrected=False, leakage_corrected=False,
-    #              dir_ex_corrected=False, dithering=False)
     
     def calc_ph_num(self,pure_python=False):
         """

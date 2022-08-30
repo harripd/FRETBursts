@@ -2,9 +2,7 @@ FRETBursts
 ==========
 
 [![DOI](https://zenodo.org/badge/5991/tritemio/FRETBursts.svg)](https://zenodo.org/badge/latestdoi/5991/tritemio/FRETBursts)
-[![TravisCI Build Status](https://travis-ci.org/OpenSMFS/FRETBursts.svg?branch=master)](https://travis-ci.org/OpenSMFS/FRETBursts)
-[![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/g0ih9gvm7r8459to/branch/master?svg=true)](https://ci.appveyor.com/project/tritemio/fretbursts-llfcd/branch/master)
-
+[![Tests](https://github.com/OpenSMFS/FRETBursts/actions/workflows/tests.yml/badg.svg)](https://github.com/OpenSMFS/FRETBursts/actions)
 > *Quick links: [Reference documentation](http://fretbursts.readthedocs.org/), [FRETBursts tutorials](https://github.com/OpenSMFS/FRETBursts_notebooks#fretbursts-notebooks), [FRETBursts paper](http://dx.doi.org/10.1101/039198)*
 
 Latest News
