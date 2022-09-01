@@ -10,6 +10,7 @@ Misc utility functions
 import os
 import sys
 import numpy as np
+from itertools import chain, product
 from collections.abc import Iterable
 
 
@@ -197,9 +198,8 @@ def dict_equal(*dicts):
         for key, val0 in dicts[0].items():
             for dct in dicts[1:]:
                 if not _large_equal(val0, dct[key]):
-                    comp = False
-                    break 
-            if not comp:
-                break
+                    return False
     return comp
 
+def s_equal(*lsts):
+    return np.all([f in l0 for f, l0 in product(chain.from_iterable(l for l in lsts), lsts)])

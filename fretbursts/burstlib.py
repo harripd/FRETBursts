@@ -780,13 +780,10 @@ class Data(DataContainer):
                       'bg_bs', 'ph_sel', 'bg_corrected', 'leakage_corrected',
                       'dir_ex_corrected', 'dithering', 'fuse', 'lsb']
     
-    # Per stream properties
-    channel_stream_mappings = ['_stream_map', '_ph_streams_dict', '_ph_streams_str_dict', 
+    # Stream properties for identifying det_t indices
+    stream_mappings = ['_stream_map', '_ph_streams_dict', '_ph_streams_str_dict', 
                                '_ph_streams_inv_dict',  '_ph_streams_n_ph_map', 
-                               '_ph_streams_n_ph_inv_map', 'alt_ON']
-    # Stream properties defined for entire dataset
-    stream_mappings = ['_ph_streams', '_ph_streams_str', '_ph_streams_n_ph_dict',
-                       '_ph_streams_n_ph_inv_dict']
+                               '_ph_streams_n_ph_inv_map', '_ph_streams', '_ph_streams_str']
     # List of photon selections on which the background is computed
     # Todo: likely to deprecate and replace with a mapper from _stream_map
     # _ph_streams = [Ph_sel('all'), Ph_sel('DexDem'), Ph_sel('DexAem'),
