@@ -16,6 +16,7 @@ loading and preprocessing can be found in the `dataload` folder.
 
 import os
 import re
+from collections.abc import Iterable
 import numpy as np
 import tables
 
@@ -24,6 +25,7 @@ from .dataload.spcreader import load_spc
 from .burstlib import Data
 from .utils.misc import selection_mask
 from . import loader_legacy
+from .burstlib_ext import group_data
 import phconvert as phc
 
 import logging
@@ -437,6 +439,11 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_
     Returns:
         :class:`fretbursts.burstlib.Data` object containing the data.
     """
+    if isinstance(filename, Iterable) and not isinstance(filename, str):
+        kwargs = dict(ondisk=ondisk, require_setup=require_setup, 
+                      validate=validate, fix_order=fix_order)
+        d = group_data([photon_hdf5(f, **kwargs) for f in filename])
+        return d
     filename = str(filename)
     assert os.path.isfile(filename), 'File not found.'
     version = phc.hdf5._check_version(filename)

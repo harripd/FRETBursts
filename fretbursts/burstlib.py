@@ -779,7 +779,14 @@ class Data(DataContainer):
     burst_metadata = ['m', 'L', 'T', 'TT', 'F', 'FF', 'P', 'PP', 'rate_th',
                       'bg_bs', 'ph_sel', 'bg_corrected', 'leakage_corrected',
                       'dir_ex_corrected', 'dithering', 'fuse', 'lsb']
-
+    
+    # Per stream properties
+    channel_stream_mappings = ['_stream_map', '_ph_streams_dict', '_ph_streams_str_dict', 
+                               '_ph_streams_inv_dict',  '_ph_streams_n_ph_map', 
+                               '_ph_streams_n_ph_inv_map', 'alt_ON']
+    # Stream properties defined for entire dataset
+    stream_mappings = ['_ph_streams', '_ph_streams_str', '_ph_streams_n_ph_dict',
+                       '_ph_streams_n_ph_inv_dict']
     # List of photon selections on which the background is computed
     # Todo: likely to deprecate and replace with a mapper from _stream_map
     # _ph_streams = [Ph_sel('all'), Ph_sel('DexDem'), Ph_sel('DexAem'),
@@ -834,7 +841,7 @@ class Data(DataContainer):
         if hasattr(self,'_ph_streams_str'):
             return self._ph_streams_str
         else:
-            self.add(_ph_streams_str = [s for s in self.ph_streams])
+            self.add(_ph_streams_str = [s.__str__() for s in self.ph_streams])
             return self._ph_streams_str
     @property
     def ph_streams_str_dict(self):

@@ -65,7 +65,7 @@ from . import mfit
 
 from .burstlib import isarray, Data
 from .phtools.burstsearch import Bursts
-from itertools import islice
+from itertools import chain, islice
 
 def moving_window_startstop(start, stop, step, window=None):
     """Computes list of (start, stop) values defining a moving-window.
@@ -849,6 +849,91 @@ def join_data(d_list, gap=0):
             bursts_ch_i.stop += offset_clk
         iburst_start += d_i.num_bursts
 
+    return new_d
+
+def group_data(d_list):
+    """
+    Group a list of data objects into single data object as though each
+    data object was a different set of set of spots, so the returned data object 
+    appears as a multi-spot experiment. Usefull for joining technical repeats,
+    especially so that background calculation etc can be calculated equally on all
+    members.
+    This serves as an alternative to :func:`join_data` but has some key differences:
+    1. Data objects can be at any state of analysis
+    2. Photon data is maintained, so reassesment of background, burst search etc. all remain possible
+    3. Each data object is treated as a separate spot, so burst arrays are not concatenated
+
+    Parameters
+    ----------
+    d_list : list of Data
+        A list of data objects to be grouped into single data object
+
+    Raises
+    ------
+    RuntimeError
+        Mismatched fields indicating data are not technical repeats of each other
+    ValueError
+        Inconsistent FRET correction factors
+
+    Returns
+    -------
+    new_d : Data
+        Data object of inputs grouped into new multi-spot measurment.
+
+    """
+    if hasattr(d_list[0], 'bg_time_s'):
+        if np.any([d.bg_time_s != d_list[0].bg_time_s for d in d_list]):
+            raise RuntimeError("Inconsistent background estimation")
+    if hasattr(d_list[0], '_stream_map'):
+        if not dict_equal(*[d._stream_map[0] for d in d_list]):
+            raise RuntimeError("Inconsistent stream maps")
+    new_d = Data(**dict(d_list[0]))
+    new_d.nch = sum([d.nch for d in d_list])
+    new_d.name = 'Joined data of\n' + '\n'.join(d.name for d in d_list)
+    # check and concatenate fields defining spectral maps, (these are ones defined before applying alternation period)
+    for d in d_list[1:]:
+        for field in ('det_spectral', 'det_p_s_pol', 'det_split'):
+            if hasattr(d, field) and hasattr(d_list[0], field):
+                new_d[field] += getattr(d, field)
+            elif hasattr(d, field) != hasattr(d_list[0], field):
+                raise RuntimeError(f"Inconsistent {field} assignment in files attempting to combine")
+    # rebuilding stream maps (skipped if before alternation applied)
+    new_d.delete('_ph_streams_dict', warning=False)
+    if hasattr(new_d, 'stream_map'):
+        new_d._stream_map = list(chain.from_iterable(d._stream_map for d in d_list))
+        try:
+            _ = new_d.ph_streams_dict
+        except NotImplementedError:
+            raise RuntimeError("Cannot concatenate inconsistent stream maps")
+    # checking burst corrections are all applied equally, so joined E/S values consistent
+    for field in ('leakage', 'dir_ex', 'gamma', 'beta'):
+        if np.any([d[field] != new_d[field] for d in d_list]):
+            raise ValueError(f"Different {field} corrections, ensure data sets are technical repeats")
+    # Check that burst metadata is also consistent, so analysis, if done conducted equally
+    for d in d_list[1:]:
+        for field in Data.burst_metadata:
+            if hasattr(d, field) and hasattr(new_d, field):
+                if field not in ('T', 'TT'): # T and TT relate to max count rates, which are derived from data, so should not be identical
+                    value = getattr(d, field)
+                    if value != getattr(new_d, field):
+                        raise ValueError(f"Different {field} values, ensure data sets are technical repeats")
+                    else:
+                        new_d[field] += value
+            elif hasattr(d, field) != hasattr(new_d, field) and field not in ('T', 'TT'):
+                raise RuntimeError(f"Inconsistent analysis of {field}")
+    # join large data fields
+    for d in d_list[1:]:    
+        for field in chain(Data.ph_fields, Data.burst_fields, Data.channel_stream_mappings[2:]):
+            if hasattr(d, field) and hasattr(d_list[0], field):
+                value = getattr(d, field)
+                if isinstance(value, list):
+                    new_d[field] += value
+                elif isinstance(value, dict):
+                    for key, val in value.items():
+                        new_d[field][key] += val
+            elif hasattr(d, field) != hasattr(d_list[0], field):
+                raise RuntimeError(f"Inconsistent analysis of {field}")
+        
     return new_d
 
 
