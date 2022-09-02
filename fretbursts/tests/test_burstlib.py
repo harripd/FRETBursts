@@ -10,7 +10,7 @@ Running the tests requires `py.test`.
 """
 
 from collections import namedtuple
-from itertools import chain, product
+from itertools import chain, product, permutations
 import pytest
 import numpy as np
 from scipy.stats import norm
@@ -106,27 +106,7 @@ def data_1ch(request):
     return d
 
 
-@pytest.mark.parametrize('data_ch, process', 
-                         ((dat, proc) for dat, proc in product((load_dataset_1ch, 
-                                                                load_dataset_1ch_nsalex, 
-                                                                load_dataset_8ch), 
-                                                               (True, False)) if dat is not load_dataset_8ch or proc))
-def test_group_data(data_ch, process):
-    if process:    
-        orig_d = data_ch()
-    else:
-        orig_d = data_ch(process=process)
-    n = orig_d.nch
-    d = bext.group_data([orig_d for _ in range(8)])
-    assert d.nch == n*8
-    for field in Data.ph_fields:
-        if hasattr(orig_d, field):
-            assert len(getattr(d, field)) == n*8
-    if process:
-        loader.alex_apply_period(d)
-    for field in Data.burst_fields:
-        if hasattr(d, field):
-            assert len(getattr(d, field)) == n*8
+
 
 def load_dataset_group():
     d = load_dataset_1ch_nsalex()
@@ -1199,6 +1179,61 @@ def test_join_data(data):
     for bursts in dj.mburst:
         assert (np.diff(bursts.start) > 0).all()
 
+@pytest.mark.parametrize('data_ch, process', 
+                         ((dat, proc) for dat, proc in product((load_dataset_1ch, 
+                                                                load_dataset_1ch_nsalex, 
+                                                                load_dataset_8ch), 
+                                                               (True, False)) if dat is not load_dataset_8ch or proc))
+def test_group_data_base(data_ch, process):
+    """Test grouping of data before and after burst analysis"""
+    if process:    
+        orig_d = data_ch()
+    else:
+        orig_d = data_ch(process=process)
+    n = orig_d.nch
+    d = bext.group_data([orig_d for _ in range(8)])
+    assert d.nch == n*8
+    for field in Data.ph_fields:
+        if hasattr(orig_d, field):
+            assert len(getattr(d, field)) == n*8
+    if process:
+        loader.alex_apply_period(d)
+    for field in Data.burst_fields:
+        if hasattr(d, field):
+            assert len(getattr(d, field)) == n*8
+
+@pytest.mark.parametrize('data_ch', (load_dataset_1ch, load_dataset_1ch_nsalex, load_dataset_8ch))
+def test_group_data_corrections(data_ch):
+    """Check that corrections/burst selections still work"""
+    orig_d = data_ch()
+    n = orig_d.nch
+    orig_d = orig_d.select_bursts(select_bursts.size, th1=30)
+    d = bext.group_data([orig_d for _ in range(8)])
+    for field in Data.ph_fields + Data.burst_fields:
+        if hasattr(orig_d, field):
+            assert len(getattr(d, field)) == n*8
+    orig_d.leakage = 0.1
+    orig_d.gamma = 1.1
+    if orig_d.alternated:
+        orig_d.dir_ex = 0.1
+        orig_d.beta = 0.9
+    d = bext.group_data([orig_d for _ in range(8)])
+    for field in Data.ph_fields + Data.burst_fields:
+        if hasattr(orig_d, field):
+            assert len(getattr(d, field)) == n*8
+
+def test_group_data_checks():
+    """Ensure checks in group_check() raise errors"""
+    d1 = load_dataset_1ch()
+    d1l = load_dataset_1ch()
+    d1l.leakage = 0.1
+    d1s = load_dataset_1ch()
+    d1s = d1s.select_bursts(select_bursts.size, th1=20)
+    d2 = load_dataset_1ch(process=False)
+    d3 = load_dataset_8ch()
+    for da, db in permutations((d1, d1l, d1s, d2, d3), 2):
+        with pytest.raises(RuntimeError):
+            bext.group_data([da, db])
 
 def test_collapse(data_8ch):
     """Test the .collapse() method that joins the ch.

@@ -922,7 +922,7 @@ def group_data(d_list):
         value = d_list[0][field]
         if isinstance(value, list):
             new_d[field] = list(chain.from_iterable(d[field] for d in d_list))
-        elif isinstance(value, np.ndarray):
+        elif isinstance(value, np.ndarray) and value.ndim > 0:
             print(field, value)
             new_d[field] = np.concatenate(list(d[field] for d in d_list))
         elif isinstance(value, dict):
