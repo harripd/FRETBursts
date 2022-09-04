@@ -885,7 +885,8 @@ def group_data(d_list):
             raise RuntimeError("Inconsistent background estimation")
     new_d = Data(**dict(d_list[0]))
     new_d.add(nch = sum([d.nch for d in d_list]))
-    new_d.add(name = 'Joined data of\n' + '\n'.join(d.name for d in d_list))
+    new_d.add(name = 'Grouped data starting with ' + d_list[0].name)
+    new_d.add(fname = [d.fname for d in d_list])
     for field in ('_leakage', '_dir_ex', '_gamma', '_beta', 'clk_p'):
         if not np.all([np.allclose(d[field], new_d[field])  for d in d_list]):
             raise ValueError(f"Different {field} corrections, ensure data sets are technical repeats")
