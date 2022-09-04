@@ -614,7 +614,7 @@ def _nsalex_apply_period_1ch(d, i, delete_ph_t=True):
 
     *See also:* :func:`alex_apply_period`.
     """
-    ich = 0   # we only support single-spot here
+    ich = i
     donor_ch, accept_ch = d._det_donor_accept_multich[ich]
     D_ON_multi, A_ON_multi = d._D_ON_multich[ich], d._A_ON_multich[ich]
     D_ON = [(D_ON_multi[i], D_ON_multi[i + 1])

@@ -887,7 +887,7 @@ def group_data(d_list):
     new_d.add(nch = sum([d.nch for d in d_list]))
     new_d.add(name = 'Joined data of\n' + '\n'.join(d.name for d in d_list))
     for field in ('_leakage', '_dir_ex', '_gamma', '_beta', 'clk_p'):
-        if np.any([d[field] != new_d[field] for d in d_list]):
+        if not np.all([np.allclose(d[field], new_d[field])  for d in d_list]):
             raise ValueError(f"Different {field} corrections, ensure data sets are technical repeats")
     if hasattr(d_list[0], 'nanotimes_params'):
         if not dict_equal(*[d.nanotimes_params[0] for d in d_list]):
@@ -896,7 +896,7 @@ def group_data(d_list):
         new_d.add(det_donor_accept=[l for l in chain.from_iterable(d.det_donor_accept for d in d_list)])
     # Check that burst metadata is also consistent, so analysis, if done conducted equally
     meta_data = dict()
-    for field in chain(Data.ph_fields, Data.burst_fields, Data.bg_fields, Data.burst_metadata):
+    for field in chain(Data.ph_fields, Data.burst_fields, Data.bg_fields, Data.burst_metadata, ('ph_times_t','det_t')):
         if hasattr(d_list[0], field):
             if np.any([not hasattr(d, field) for d in d_list[1:]]):
                 raise RuntimeError(f"Inconsistent analysis of {field}")
