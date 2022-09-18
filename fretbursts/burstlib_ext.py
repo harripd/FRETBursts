@@ -309,9 +309,9 @@ def calc_bg_brute(dx, min_ph_delay_list=None, return_all=False,
 
     index = pd.MultiIndex.from_product([list(range(dx.nch)), ph_sel_labels],
                                        names=['CH', 'ph_sel'])
-    best_th = pd.DataFrame(index=index, columns=np.arange(dx.nperiods))
+    best_th = pd.DataFrame(index=index, columns=np.arange(dx.nperiods.max()))
     best_th.columns.name = 'period'
-    best_th.sortlevel(inplace=True)
+    best_th.sort_index(inplace=True)
     best_bg = best_th.copy()
 
     for ph_sel in dx.ph_streams:
@@ -323,7 +323,7 @@ def calc_bg_brute(dx, min_ph_delay_list=None, return_all=False,
 
         # Compute the best Th and BG estimate for all ch and periods
         for ich in range(dx.nch):
-            for period in range(dx.nperiods):
+            for period in range(dx.nperiods[ich]):
                 b = BG_data_e[ph_sel][ich, period, :]
                 i_best_th = b[-np.isnan(b)].argmin()
                 best_th.loc[(ich, str(ph_sel)), period] = \
@@ -496,7 +496,8 @@ def fit_bursts_kde_peak(dx, burst_data='E', bandwidth=0.03, weights=None,
 
 def bursts_fitter(dx, burst_data='E', save_fitter=True,
                   weights=None, gamma=1, add_naa=False, skip_ch=None,
-                  binwidth=None, bandwidth=None, model=None, verbose=False):
+                  binwidth=None, bandwidth=None, model=None, verbose=False,
+                  fit_tot=True):
     """Create a mfit.MultiFitter object (for E or S) add it to `dx`.
 
     A MultiFitter object allows to fit multi-channel data with the same
@@ -518,6 +519,8 @@ def bursts_fitter(dx, burst_data='E', save_fitter=True,
         model (lmfit.Model object or None): lmfit Model used for histogram
             fitting. If None the histogram is not fitted.
         verbose (bool): if False avoids printing any output.
+        fit_tot (bool): whether to perform histogram fitting on combination of
+            all arrays
 
     Returns:
         The `mfit.MultiFitter` object with the specified burst-size weights.
@@ -542,7 +545,7 @@ def bursts_fitter(dx, burst_data='E', save_fitter=True,
     if binwidth is not None:
         fitter.histogram(binwidth=binwidth)
         if model is not None:
-            fitter.fit_histogram(model=model, verbose=verbose)
+            fitter.fit_histogram(model=model, verbose=verbose, fit_tot=fit_tot)
     if save_fitter:
         # Save fitter variables as normal attributes (not with Data.add)
         # so they are not copied when copying Data (e.g. burst selection)
@@ -556,14 +559,14 @@ def _get_bg_distrib_erlang(d, ich=0, m=10, ph_sel=Ph_sel('all'),
     """Return a frozen (scipy) erlang distrib. with rate equal to the bg rate.
     """
     assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
-
+    # fix negative periods so wrapping occurs coorectly
+    parr = np.array(period)
+    for i, p in enumerate(parr):
+        if p < 0:
+            parr[i] = len(d.Lim[ich]) - p + 1
+    period = tuple(parr)
     # Compute the BG distribution
-    if ph_sel == Ph_sel('all'):
-        bg_ph = d.bg_dd[ich] + d.bg_ad[ich]
-    elif ph_sel == Ph_sel(Dex='Dem'):
-        bg_ph = d.bg_dd[ich]
-    elif ph_sel == Ph_sel(Dex='Aem'):
-        bg_ph = d.bg_ad[ich]
+    bg_ph = d.bg[ph_sel][ich]
 
     rate_ch_kcps = bg_ph[period[0]:period[1]+1].mean()/1e3  # bg rate in kcps
     bg_dist = erlang(a=m, scale=1./rate_ch_kcps)
@@ -578,7 +581,7 @@ def _get_bg_erlang(d, ich=0, m=10, ph_sel=Ph_sel('all'), period=0):
     bg_dist = erlang(a=m, scale=1./bg_rate)
     return bg_dist
 
-
+# TODO: add test
 def histogram_mdelays(d, ich=0, m=10, ph_sel=Ph_sel('all'),
                       binwidth=1e-3, dt_max=10e-3, bins=None,
                       inbursts=False):
@@ -608,6 +611,7 @@ def histogram_mdelays(d, ich=0, m=10, ph_sel=Ph_sel('all'),
     return hist
 
 
+# TODO: add tests beyond simple smoke tests
 def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
                       ph_sel=Ph_sel('all'), bursts=False, bg_fit=True,
                       bg_F=0.8):
@@ -643,17 +647,17 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
     if ph_sel == Ph_sel('all'):
         ph = d.ph_times_m[ich][periods]
         if bursts:
-            phb = ph[d.ph_in_burst[ich][periods]]
+            phb = ph[d.ph_in_bursts_mask_ich(ich=ich)[periods]]
     elif ph_sel == Ph_sel(Dex='Dem'):
-        donor_ph_period = -d.A_em[ich][periods]
+        donor_ph_period = ~d.A_em[ich][periods]
         ph = d.ph_times_m[ich][periods][donor_ph_period]
         if bursts:
-            phb = ph[d.ph_in_burst[ich][periods][donor_ph_period]]
+            phb = ph[d.ph_in_bursts_mask(ich=ich)[periods][donor_ph_period]]
     elif ph_sel == Ph_sel(Dex='Aem'):
         accept_ph_period = d.A_em[ich][periods]
         ph = d.ph_times_m[ich][periods][accept_ph_period]
         if bursts:
-            phb = ph[d.ph_in_burst[ich][periods][accept_ph_period]]
+            phb = ph[d.ph_in_bursts_mask(ich=ich)[periods][accept_ph_period]]
 
     ph_mdelays = np.diff(ph[::m])*d.clk_p*1e3        # millisec
     if bursts:
@@ -661,7 +665,7 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
         phb_mdelays = phb_mdelays[phb_mdelays < 5]
 
     # Compute the PDF through histograming
-    hist_kwargs = dict(bins=bins, normed=True)
+    hist_kwargs = dict(bins=bins, density=True)
     mdelays_hist_y, _ = np.histogram(ph_mdelays, **hist_kwargs)
     bin_x = bins[:-1] + 0.5*(bins[1] - bins[0])
     if bursts:
@@ -684,7 +688,7 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
         # Fitting the BG portion of the PDF to an Erlang
         _x = bin_x[bin_x > bg_mean*bg_F]
         _y = mdelays_hist_y[bin_x > bg_mean*bg_F]
-
+        
         def fit_func(x, a, rate_kcps):
             return a * erlang.pdf(x, a=m, scale=1./rate_kcps)
 
@@ -692,7 +696,6 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
             return fit_func(x, p[0], p[1]) - y
 
         p, flag = leastsq(err_func, x0=[0.9, 3.], args=(_x, _y))
-        print(p, flag)
         a, rate_kcps = p
         results.extend([a, rate_kcps])
 
@@ -713,10 +716,11 @@ def burst_data_period_mean(dx, burst_data):
     Example:
         burst_period_mean(dx, dx.nt)
     """
-    mean_burst_data = np.zeros((dx.nch, dx.nperiods))
+    mean_burst_data = np.empty((dx.nch, dx.nperiods.max()))
+    mean_burst_data[:] = np.nan
     for ich, (b_data_ch, period) in enumerate(zip(burst_data, dx.bp)):
-        for iperiod in range(dx.nperiods):
-            mean_burst_data[ich, iperiod] = b_data_ch[period == iperiod].mean()
+        for iperiod in range(dx.nperiods[ich]):
+            mean_burst_data[ich, iperiod] = np.nanmean(b_data_ch[period == iperiod])
     return mean_burst_data
 
 
@@ -799,14 +803,14 @@ def join_data(d_list, gap=0):
                 assert new_d[name][ich].size == new_size
 
     # Set the background fields by concatenation along axis = 0
-    new_nperiods = sum((d.nperiods for d in d_list))
+    new_nperiods = np.sum([d.nperiods for d in d_list], axis=0)
     for name in ('Lim', 'Ph_p'):
         if name in new_d:
             new_d.add(**{name: []})
             for ich in range(nch):
                 value = np.concatenate([d[name][ich] for d in d_list])
                 new_d[name].append(value)
-                assert new_d[name][ich].shape[0] == new_nperiods
+                assert new_d[name][ich].shape[0] == new_nperiods[ich]
     if 'bg' in new_d:
         new_d.add(bg={})
         for sel in d.bg:
@@ -814,7 +818,7 @@ def join_data(d_list, gap=0):
             for ich in range(nch):
                 value = np.concatenate([d.bg[sel][ich] for d in d_list])
                 new_d.bg[sel].append(value)
-                assert new_d.bg[sel][ich].shape[0] == new_nperiods
+                assert new_d.bg[sel][ich].shape[0] == new_nperiods[ich]
 
     # Set the i_origin burst attribute
     new_d.add(i_origin=[])
@@ -825,13 +829,13 @@ def join_data(d_list, gap=0):
 
     # Update the `bp` attribute to refer to the background period in
     # the new concatenated background arrays.
-    sum_nperiods = np.cumsum([d.nperiods for d in d_list])
+    sum_nperiods = np.cumsum([d.nperiods for d in d_list], axis=0)
     for i_d, d in islice(enumerate(d_list), 1, None):
         for ich in range(nch):
             # Burst "slice" in new_d coming from current d
             b_mask = new_d.i_origin[ich] == i_d
             # Add the nperiods of all the previous measurements
-            new_d.bp[ich][b_mask] = new_d.bp[ich][b_mask] + sum_nperiods[i_d-1]
+            new_d.bp[ich][b_mask] = new_d.bp[ich][b_mask] + sum_nperiods[i_d-1, ich]
 
     # Modify the new mburst so the time of burst start/end is monotonic
     offset_clk = 0
@@ -1063,7 +1067,6 @@ def ph_burst_stats(d, ich=0, func=np.mean, ph_sel=Ph_sel('all')):
     stats = [func(times) for times in burst_photons]
     return np.array(stats)
 
-
 def asymmetry(dx, ich=0, func=np.mean, dropnan=True):
     """Compute an asymmetry index for each burst in channel `ich`.
 
@@ -1081,9 +1084,11 @@ def asymmetry(dx, ich=0, func=np.mean, dropnan=True):
     Returns:
         An arrays of photon timestamps (one array per burst).
     """
+    if ich is None:
+        burst_asym = [asymmetry(dx, ich=i, func=func, dropnan=dropnan) for i in range(dx.nch)]
     stats_d = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel(Dex='Dem'))
     stats_a = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel(Dex='Aem'))
     burst_asym = (stats_d - stats_a) * dx.clk_p * 1e3
     if dropnan:
-        burst_asym = burst_asym[-np.isnan(burst_asym)]
+        burst_asym = burst_asym[~np.isnan(burst_asym)]
     return burst_asym

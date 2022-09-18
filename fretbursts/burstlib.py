@@ -570,8 +570,9 @@ class Data(DataContainer):
             for the different photon streams and channels. Keys are `Ph_sel`
             objects and values are lists (one element per channel) of
             background rates.
-        nperiods (int): number of periods in which timestamps are split for
-            background calculation
+        nperiods (array): number of periods in which timestamps are split for
+            background calculation, given per channel
+            **NOTE: this is changed from previous versions, to support grouped experiments**
         bg_fun (function): function used to compute the background rates
         Lim (list): each element of this list is a list of index pairs for
             `.ph_times_m[i]` for **first** and **last** photon in each period.
@@ -940,7 +941,7 @@ class Data(DataContainer):
         """Iterate through arrays of ph timestamps in each background period.
         """
         mask = self.get_ph_mask(ich=ich, ph_sel=ph_sel)
-        for period in range(self.nperiods):
+        for period in range(self.nperiods[ich]):
             yield self.get_ph_times_period(period, ich=ich, mask=mask)
 
     def get_ph_times_period(self, period, ich=0, ph_sel=Ph_sel('all'),
@@ -1636,6 +1637,7 @@ class Data(DataContainer):
 
         The keys are the ph selections in self.ph_streams and the values
         are 1-D arrays of size nch.
+        # TODO: this looks deprecated, consider removing
         """
         Th_us = {}
         for ph_sel in self.ph_streams:
@@ -1655,6 +1657,7 @@ class Data(DataContainer):
         The keys are the ph selections in self.ph_streams and the values
         are 1-D arrays of size nch.
         """
+        print("get bg th arrays")
         n_streams = len(self.ph_streams)
 
         if np.size(tail_min_us) == 1:
@@ -1666,7 +1669,7 @@ class Data(DataContainer):
                              len(tail_min_us))
         th_us = {}
         for i, key in enumerate(self.ph_streams):
-            th_us[key] = np.ones(nperiods) * tail_min_us[i]
+            th_us[key] = [np.ones(nper) * tail_min_us[i] for nper in nperiods]
         # Save the input used to generate Th_us
         self.add(bg_th_us_user=tail_min_us)
         return th_us
@@ -1690,17 +1693,21 @@ class Data(DataContainer):
     def _get_num_periods(self, time_s):
         """Return the number of periods using `time_s` as period duration.
         """
-        duration = self.time_max - self.time_min
+        ph_field = 'ph_times_m' if hasattr(self, 'ph_times_m') else 'ph_times_t'
+        mins = np.array([min(time) for time in self[ph_field]]) * self.clk_p
+        maxs = np.array([max(time) for time in self[ph_field]]) * self.clk_p
+        duration = maxs - mins
         # Take the ceil to have at least 1 periods
-        nperiods = np.ceil(duration / time_s)
+        nperiods = np.ceil(duration / time_s).astype(int)
         # Discard last period if negligibly small to avoid problems with
         # background fit with very few photons.
-        if nperiods > 1:
-            last_period = self.time_max - time_s * (nperiods - 1)
-            # Discard last period if smaller than 3% of the bg period
-            if last_period < time_s * 0.06:
-                nperiods -= 1
-        return int(nperiods)
+        for i in range(self.nch):
+            if nperiods[i] > 1:
+                last_period = maxs[i] - time_s * (nperiods[i] - 1)
+                # Discard last period if smaller than 3% of the bg period
+                if last_period < time_s * 0.06:
+                    nperiods[i] -= 1
+        return nperiods
 
     def calc_bg(self, fun, time_s=60, tail_min_us=500, F_bg=2,
                 error_metrics=None, fit_allph=True):
@@ -1745,6 +1752,7 @@ class Data(DataContainer):
         Returns:
             None, all the results are saved in the object itself.
         """
+        ph_field = 'ph_times_m' if hasattr(self, 'ph_times_m') else 'ph_times_t'
         pprint(" - Calculating BG rates ... ")
         self._clean_bg_data()
         kwargs = dict(clk_p=self.clk_p, error_metrics=error_metrics)
@@ -1758,34 +1766,33 @@ class Data(DataContainer):
             auto_th_kwargs = dict(clk_p=self.clk_p, tail_min_us=tail_min_us0)
             th_us = {}
             for key in self.ph_streams:
-                th_us[key] = np.zeros(nperiods)
+                th_us[key] = [np.zeros(nper) for nper in nperiods]
         else:
             th_us = self._get_bg_th_arrays(tail_min_us, nperiods)
-
-        # Note: histogram bins are half-open, e.g. [a, b)
-        bins = ((np.arange(nperiods + 1) * time_s + self.time_min) /
-                self.clk_p)
 
         Lim, Ph_p = [], []
         BG, BG_err = [], []
         Th_us = []
         for ich, ph_ch in enumerate(self.iter_ph_times()):
+            print(f"Channel {ich}")
             masks = {sel: self.get_ph_mask(ich, ph_sel=sel)
                      for sel in self.ph_streams}
 
+            # Note: histogram bins are half-open, e.g. [a, b)
+            bins = (np.arange(nperiods[ich]+1) * time_s + min(self[ph_field][ich])*self.clk_p) / self.clk_p
             counts, _ = np.histogram(ph_ch, bins=bins)
             lim, ph_p = [], []
-            bg = {sel: np.zeros(nperiods) for sel in self.ph_streams}
-            bg_err = {sel: np.zeros(nperiods) for sel in self.ph_streams}
+            bg = {sel: np.zeros(nperiods[ich]) for sel in self.ph_streams}
+            bg_err = {sel: np.zeros(nperiods[ich]) for sel in self.ph_streams}
             if ph_ch.size == 0:
                 Lim.append(lim)
                 Ph_p.append(ph_p)
                 BG.append(bg)
                 BG_err.append(bg_err)
-                Th_us.append(th_us)
+                Th_us.append({key:val[ich] for key, val in th_us.items()})
                 continue
             i1 = 0
-            for ip in range(nperiods):
+            for ip in range(nperiods[ich]):
                 i0 = i1
                 i1 += counts[ip]
                 lim.append((i0, i1 - 1))
@@ -1796,9 +1803,9 @@ class Data(DataContainer):
                     sel = Ph_sel('all')
                     if bg_auto_th:
                         _bg, _ = fun(ph_i, **auto_th_kwargs)
-                        th_us[sel][ip] = 1e6 * F_bg / _bg
+                        th_us[sel][ich][ip] = 1e6 * F_bg / _bg
                     bg[sel][ip], bg_err[sel][ip] = \
-                        fun(ph_i, tail_min_us=th_us[sel][ip], **kwargs)
+                        fun(ph_i, tail_min_us=th_us[sel][ich][ip], **kwargs)
 
                 for sel in streams_noall:
                     # This supports cases of D-only or A-only timestamps
@@ -1816,9 +1823,9 @@ class Data(DataContainer):
                     if ph_i_sel.size > 10:
                         if bg_auto_th:
                             _bg, _ = fun(ph_i_sel, **auto_th_kwargs)
-                            th_us[sel][ip] = 1e6 * F_bg / _bg
+                            th_us[sel][ich][ip] = 1e6 * F_bg / _bg
                         bg[sel][ip], bg_err[sel][ip] = \
-                            fun(ph_i_sel, tail_min_us=th_us[sel][ip], **kwargs)
+                            fun(ph_i_sel, tail_min_us=th_us[sel][ich][ip], **kwargs)
 
             if not fit_allph:
                 bg[Ph_sel('all')] += sum(bg[s] for s in streams_noall)
@@ -1827,7 +1834,7 @@ class Data(DataContainer):
             Ph_p.append(ph_p)
             BG.append(bg)
             BG_err.append(bg_err)
-            Th_us.append(th_us)
+            Th_us.append({key:val[ich] for key, val in th_us.items()})
 
         # Make Dict Of Lists (DOL) from Lists of Dicts
         BG_dol, BG_err_dol, Th_us_dol = {}, {}, {}
@@ -1841,8 +1848,8 @@ class Data(DataContainer):
         for i, (lim, ph_p) in enumerate(zip(Lim, Ph_p)):
             if len(lim) == 0:
                 assert len(ph_p) == 0
-                Lim[i] = [(0, 0)] * nperiods
-                Ph_p[i] = [(0, 0)] * nperiods
+                Lim[i] = [(0, 0)] * nperiods[i]
+                Ph_p[i] = [(0, 0)] * nperiods[i]
 
         self.add(bg=BG_dol, bg_err=BG_err_dol, bg_th_us=Th_us_dol,
                  Lim=Lim, Ph_p=Ph_p,
@@ -1854,7 +1861,7 @@ class Data(DataContainer):
 
     @property
     def nperiods(self):
-        return len(self.bg[Ph_sel('all')][0])
+        return np.array([len(self.bg[Ph_sel('all')][i]) for i in range(self.nch)])
 
     @property
     def bg_mean(self):
@@ -1878,13 +1885,13 @@ class Data(DataContainer):
                str(ph_sel), mute)
         bg_time_clk = self.bg_time_s / self.clk_p
         Lim, Ph_p = [], []
-        for ph_ch, lim in zip(self.iter_ph_times(ph_sel), self.Lim):
-            bins = np.arange(self.nperiods + 1) * bg_time_clk
+        for i, (ph_ch, lim) in enumerate(zip(self.iter_ph_times(ph_sel), self.Lim)):
+            bins = np.arange(self.nperiods[i] + 1) * bg_time_clk
             # Note: histogram bins are half-open, e.g. [a, b)
             counts, _ = np.histogram(ph_ch, bins=bins)
             lim, ph_p = [], []
             i1 = 0
-            for ip in range(self.nperiods):
+            for ip in range(self.nperiods[i]):
                 i0 = i1
                 i1 += counts[ip]
                 lim.append((i0, i1 - 1))

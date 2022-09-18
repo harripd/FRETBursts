@@ -18,7 +18,7 @@ import numpy as np
 
 
 
-class gaussian_kde_w(object):
+class gaussian_kde_w:
     """
     Representation of a kernel-density estimate using Gaussian kernels.
 

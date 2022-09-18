@@ -295,7 +295,7 @@ def factory_two_asym_gaussians(add_bridge=False, p1_center=0.1, p2_center=0.9,
 ##
 # Classes to perform fit-related operations on multi-channel data
 #
-class FitterBase(object):
+class FitterBase:
     """Base class for histogramming a dataset.
 
     To set weights assign attribute an array with same size as `data` to
@@ -323,7 +323,7 @@ class FitterBase(object):
         self.hist_axis = bins[:-1] + 0.5*self.hist_binwidth
         self.hist_counts = np.array(hist_counts)
         self.hist_pdf = np.array(hist_counts, dtype=np.float)
-        self.hist_pdf /= self.hist_counts.sum(1)[:, np.newaxis]
+        self.hist_pdf /= self.hist_counts.sum(axis=1)[:, np.newaxis]
         self.hist_pdf /= self.hist_binwidth
         self._hist_computed = True
 
@@ -335,7 +335,7 @@ class FitterBase(object):
         return self._x_axis
 
 
-class MultiFitter(FitterBase):
+class MultiFitter:
     """A class handling a list of 1-D datasets for histogramming, KDE, fitting.
 
     This class takes a list of 1-D arrays of samples (such as E values
@@ -366,6 +366,13 @@ class MultiFitter(FitterBase):
         self.skip_ch = []
         if skip_ch is not None:
             self.skip_ch = skip_ch
+    
+    def _set_hist_data(self, hist_counts, bins):
+        self.hist_bins = bins
+        self.hist_binwidth = (bins[1] - bins[0])
+        self.hist_axis = bins[:-1] + 0.5*self.hist_binwidth
+        self.hist_counts = np.array(hist_counts)
+        self._hist_computed = True
 
     @property
     def weights(self):
@@ -378,6 +385,26 @@ class MultiFitter(FitterBase):
         except TypeError:
             # values is not iterable
             self._weights = [values]*self.ndata
+            
+    @property
+    def hist_counts_tot(self):
+        return self.hist_counts.sum(axis=0)
+    
+    @property
+    def hist_pdf(self):
+        return self.hist_counts.astype(float) / self.hist_counts.sum(axis=1)[:, np.newaxis] / self.hist_binwidth
+    
+    @property
+    def hist_pdf_tot(self):
+        return self.hist_counts_tot / self.hist_counts_tot.sum() / self.hist_binwidth
+
+
+    @property
+    def x_axis(self):
+        if not hasattr(self, '_x_axis'):
+            self._x_axis = np.linspace(self.hist_axis[0],
+                                       self.hist_axis[-1], 1000)
+        return self._x_axis
 
     def histogram(self, binwidth=0.03, bins=None, verbose=False, **kwargs):
         """Compute the histogram of the data for each channel.
@@ -433,7 +460,7 @@ class MultiFitter(FitterBase):
                            for k, v in weight_kwargs.items()}
             self.weights.append(weight_func(**weight_kw_i))
 
-    def fit_histogram(self, model=None, pdf=True, **fit_kwargs):
+    def fit_histogram(self, model=None, pdf=True, fit_tot=True, **fit_kwargs):
         """Fit the histogram of each channel using the same lmfit model.
 
         A list of `lmfit.Minimizer` is stored in `.fit_res`.
@@ -446,6 +473,7 @@ class MultiFitter(FitterBase):
             pdf (bool): if True fit the normalized histogram (.hist_pdf)
                 otherwise fit the raw counts (.hist_counts).
             fit_kwargs (dict): keyword arguments passed to `model().fit`.
+            fit_tot (bool): if True then fit the sum of the data as well
         """
         if model is not None:
             self.model = model
@@ -453,8 +481,11 @@ class MultiFitter(FitterBase):
             self.histogram()
 
         data_list = self.hist_pdf if pdf else self.hist_counts
+        if fit_tot:
+            data_sum = self.hist_pdf_tot if pdf else self.hist_counts_tot
+            self.fit_res_tot = self.model.fit(data_sum, x=self.hist_axis, **fit_kwargs)
         self.fit_res = []
-        #init_params = copy.deepcopy(self.model.params)
+        # init_params = copy.deepcopy(self.model.params)
         for i, data in enumerate(data_list):
             self.fit_res.append(
                 self.model.fit(data, x=self.hist_axis, **fit_kwargs))
@@ -463,7 +494,7 @@ class MultiFitter(FitterBase):
         self.params = self.params[sorted(self.params.columns.tolist())]
         
 
-    def calc_kde(self, bandwidth=0.03):
+    def calc_kde(self, bandwidth=0.03, calc_tot=True):
         """Compute the list of kde functions and save it in `.kde`.
         """
         if self._kde_computed and self.kde_bandwidth == bandwidth:
@@ -480,20 +511,33 @@ class MultiFitter(FitterBase):
                 kde = gf.gaussian_kde_w(data, bw_method=bandwidth,
                                         weights=weights_i)
             self.kde.append(kde)
+        if calc_tot:
+            data = np.concatenate([data for i, data in enumerate(self.data_list) 
+                                   if i not in self.skip_ch])
+            if np.any([w is not None for w in self.weights]):
+                weights = np.concatenate([w for i, w in enumerate(self.weights) 
+                                          if i not in self.skip_ch])
+            else:
+                weights = [None]
+            kde = gf.gaussian_kde_w(data, bw_method=bandwidth, weights=weights)
+            self.kde_tot = kde
         self._kde_computed = True
 
-    def find_kde_max(self, x_kde, xmin=None, xmax=None):
+    def find_kde_max(self, x_kde, xmin=None, xmax=None, calc_tot=True):
         """Finds the peak position of kde functions between `xmin` and `xmax`.
 
         Results are saved in the list `.kde_max_pos`.
         """
         if not hasattr(self, 'kde'):
-            self.calc_kde()
+            self.calc_kde(calc_tot=calc_tot)
         self.kde_max_pos = np.zeros(self.ndata) * np.nan
         for ich, kde in enumerate(self.kde):
             if ich not in self.skip_ch or len(kde) == 0:
                 self.kde_max_pos[ich] = find_max(x_kde, kde(x_kde),
                                                  xmin=xmin, xmax=xmax)
+        if calc_tot:
+            self.kde_max_pos_tot = find_max(x_kde, self.kde_tot(x_kde), 
+                                            xmin=xmin, xmax=xmax)
 
 
 def plot_mfit(fitter, ich=0, residuals=False, ax=None, plot_kde=False,

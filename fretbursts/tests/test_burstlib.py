@@ -61,7 +61,8 @@ def load_dataset_1ch(process=True):
     return d
 
 def load_dataset_1ch_nsalex(process=True):
-    fn = "dsdna_d7_d17_50_50_1.hdf5"
+    # fn = "dsdna_d7_d17_50_50_1.hdf5"
+    fn = 'HP3_TE150_SPC630.hdf5'
     fname = DATASETS_DIR + fn
     d = loader.photon_hdf5(fname)
     if process:
@@ -86,6 +87,14 @@ def load_fake_pax():
     d.burst_search(L=10, m=10, F=6, pax=True)
     return d
 
+def load_dataset_grouped(process=True):
+    fn = ['HP3_TE150_SPC630.hdf5', 'HP3_TE200_SPC630.hdf5', 'HP3_TE250_SPC630.hdf5', 'HP3_TE300_SPC630.hdf5']
+    fn = [DATASETS_DIR + f for f in fn]
+    d = loader.photon_hdf5(fn)
+    if process:
+        _alex_process(d)
+    return d
+
 def normpdf(x, c=0, mu=0.5):
     return np.exp(-(x-c)**2/((mu**2)*2))/(mu*np.sqrt(2*np.pi))
 
@@ -104,38 +113,11 @@ def data_1ch_nsalex(request):
     d = load_dataset_1ch_nsalex()
     return d
 
-@pytest.mark.parametrize("data_ch, process", product([load_dataset_1ch, 
-                                             load_dataset_1ch_nsalex, 
-                                             load_dataset_8ch],
-                                            [True, False]))
-def test_group_data(data_ch, process):
-    if data_ch is load_dataset_8ch:
-        orig_d = data_ch()
-    else:
-        orig_d = data_ch(process=process)
-    n = orig_d.nch
-    d = bext.group_data([orig_d for _ in range(8)])
-    assert n*8 == d.nch
-    for field in Data.ph_fields:
-        if hasattr(d, field):
-            assert len(d[field]) == 8*n, f"{field} not correct length"
-    if not process and orig_d.alternated:
-        loader.alex_apply_period(d)
-        for field in Data.ph_fields:
-            if hasattr(d, field):
-                assert len(d[field]) == 8*n, f"{field} not correct length"
-    d.calc_bg(bg.exp_fit, time_s=30, tail_min_us='auto')
-    d.burst_search(m=10, F=7, L=10)
-    for field in Data.burst_fields:
-        if hasattr(d, field):
-            assert len(d[field]) == 8*n, f'{field} not correct length'
-
-def load_dataset_grouped(process=True):
-    d = load_dataset_1ch_nsalex(process=False)
-    d = bext.group_data([d for _ in range(8)])
-    if process:
-        _alex_process(d)
+@pytest.fixture(scope="module")
+def data_grouped(request):
+    d = load_dataset_grouped()
     return d
+
 
 @pytest.fixture(scope="module", params=[
                                     load_dataset_1ch,
@@ -148,7 +130,14 @@ def data(request):
     d = load_func()
     return d
 
-
+@pytest.fixture(scope="module", params=[
+                                    load_dataset_8ch,
+                                    load_dataset_grouped
+                                    ])
+def data_mch(request):
+    load_func = request.param
+    d = load_func()
+    return d
 
 
 ##
@@ -158,7 +147,7 @@ def data(request):
 def list_equal(list1, list2):
     """Test numerical equality of all the elements in the two lists.
     """
-    return np.all([val1 == val2 for val1, val2 in zip(list1, list2)])
+    return np.all([np.all(val1 == val2) for val1, val2 in zip(list1, list2)])
 
 def list_array_equal(list1, list2):
     """Test numerical equality between two lists of arrays.
@@ -227,9 +216,9 @@ def test_time_min_max():
     assert d.time_min == d.mburst[0].start[0] * d.clk_p
 
 
-def test_time_min_max_multispot(data_8ch):
+def test_time_min_max_multispot(data_mch):
     """Test time_min and time_max for multi-spot data."""
-    d = data_8ch
+    d = data_mch
     assert d.time_max == max(t[-1] for t in d.ph_times_m) * d.clk_p
     assert d.time_min == min(t[0] for t in d.ph_times_m) * d.clk_p
 
@@ -479,9 +468,11 @@ def test_burst_search_py_cy(data):
     """Test python and cython burst search with background-dependent threshold.
     """
     data.burst_search(pure_python=True)
+    data = data.fuse_bursts(ms=0)
     mburst1 = [b.copy() for b in data.mburst]
     num_bursts1 = data.num_bursts
     data.burst_search(pure_python=False)
+    data = data.fuse_bursts(ms=0)
     assert np.all(num_bursts1 == data.num_bursts)
     assert mburst1 == data.mburst
     data.burst_search(L=30, pure_python=True)
@@ -562,34 +553,6 @@ def test_burst_search(data):
         else:
             data.burst_search(m=10, F=7, ph_sel=Ph_sel(Dex='DAem'), compact=True)
     data.burst_search(L=10, m=10, F=7)
-
-
-def test_burst_search_and_gate(data_1ch):
-    """Test consistency of burst search and gate."""
-    d = data_1ch
-    assert d.alternated
-
-    # Smoke tests
-    bext.burst_search_and_gate(d, F=(6, 8))
-    bext.burst_search_and_gate(d, m=(12, 8))
-    bext.burst_search_and_gate(d, min_rate_cps=(60e3, 40e3))
-    if d.nch > 1:
-        mr1 = 35e3 + np.arange(d.nch) * 1e3
-        mr2 = 30e3 + np.arange(d.nch) * 1e3
-        bext.burst_search_and_gate(d, min_rate_cps=(mr1, mr2))
-
-    # Consistency test
-    d_dex = d.copy()
-    d_dex.burst_search(ph_sel=Ph_sel(Dex='DAem'))
-    d_aex = d.copy()
-    d_aex.burst_search(ph_sel=Ph_sel(Aex='Aem'))
-    d_and = bext.burst_search_and_gate(d)
-    for bursts_dex, bursts_aex, bursts_and, ph in zip(
-            d_dex.mburst, d_aex.mburst, d_and.mburst, d.iter_ph_times()):
-        ph_b_mask_dex = bl.ph_in_bursts_mask(ph.size, bursts_dex)
-        ph_b_mask_aex = bl.ph_in_bursts_mask(ph.size, bursts_aex)
-        ph_b_mask_and = bl.ph_in_bursts_mask(ph.size, bursts_and)
-        assert (ph_b_mask_and == ph_b_mask_dex * ph_b_mask_aex).all()
 
 
 def test_mch_count_ph_num_py_c(data):
@@ -973,14 +936,6 @@ def test_calc_max_rate(data):
             data.calc_max_rate(m=10, ph_sel=Ph_sel(Dex='DAem'), compact=True)
 
 
-def test_burst_data(data):
-    """Test for bext.burst_data()"""
-    bext.burst_data(data, include_bg=True, include_ph_index=True)
-    bext.burst_data(data, include_bg=False, include_ph_index=True)
-    bext.burst_data(data, include_bg=True, include_ph_index=False)
-    bext.burst_data(data, include_bg=False, include_ph_index=False)
-
-
 def test_print_burst_stats(data):
     """Smoke test for burstlib.print_burst_stats()"""
     bl.print_burst_stats(data)
@@ -1178,16 +1133,6 @@ def test_burst_selection_ranges(data):
         for ich in range(d.nch):
             selected = getter(ds, ich)
             assert ((selected >= range_.min) * (selected <= range_.max)).all()
-
-
-def test_join_data(data):
-    """Smoke test for bext.join_data() function.
-    """
-    d = data
-    dj = bext.join_data([d, d.copy()])
-    assert (dj.num_bursts == 2 * d.num_bursts).all()
-    for bursts in dj.mburst:
-        assert (np.diff(bursts.start) > 0).all()
 
 
 def test_collapse(data_8ch):

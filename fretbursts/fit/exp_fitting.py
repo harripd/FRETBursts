@@ -140,8 +140,9 @@ def expon_fit_hist(s, bins, s_min=0, weights=None, offset=0.5,
     """
     if s_min > 0: s = s[s >= s_min] - s_min
     assert s.size > 10
-
+    
     counts, bins = np.histogram(s, bins=bins, density=True)
+    
     x = bins[:-1] + 0.5*(bins[1] - bins[0])  # bin center position
     y = counts
     x = x[y > 0]

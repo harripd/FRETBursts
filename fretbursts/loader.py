@@ -318,7 +318,7 @@ def _photon_hdf5_multich(h5data, data, ondisk=True):
                          loadspecs=False)
 
 
-def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False):
+def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_order=True):
     """Load a data file saved in Photon-HDF5 format version 0.3 or higher.
 
     Photon-HDF5 is a format for a wide range of timestamp-based
@@ -336,6 +336,8 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False):
             DCR files.
         validate (bool): if True validate the Photon-HDF5 file on loading.
             If False skip any validation.
+        fix_order (bool): if True fix the order of photons so all are monotonically
+            increaseing in macrotime.
 
     Returns:
         :class:`fretbursts.burstlib.Data` object containing the data.
@@ -375,7 +377,8 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False):
         _photon_hdf5_multich(h5data, d, ondisk=ondisk)
     else:
         _photon_hdf5_1ch(h5data, d, ondisk=ondisk)
-
+    if fix_order:
+        sort_photon_times(d)
     return d
 
 
@@ -784,3 +787,25 @@ def sm_single_laser(fname):
               ch_labels=labels)
     dx.add(acquisition_duration=np.round(dx.time_max - dx.time_min, 1))
     return dx
+
+def sort_photon_times(d):
+    for i in range(d.nch):
+        if hasattr(d, 'ph_times_t'):
+            sort_t = np.argsort(d.ph_times_t[i])
+            d.ph_times_t[i] = d.ph_times_t[i][sort_t]
+            d.det_t[i] = d.det_t[i][sort_t]
+            if hasattr(d, 'nanotimes_t'):
+                d.nanotimes_t[i] = d.nanotimes_t[i][sort_t]
+        if hasattr(d, 'ph_times_m'):
+            sort_m = np.argsort(d.ph_times_m[i])
+            d.ph_times_m[i] = d.ph_times_m[i][sort_m]
+            if hasattr(d, 'nanotimes'):
+                d.nanotimes[i] = d.nanotimes[i][sort_m]
+            if hasattr(d, 'A_em'):
+                d.A_em[i] = d.A_em[i][sort_m]
+            if hasattr(d, 'D_em'):
+                d.D_em[i] = d.D_em[i][sort_m]
+            if hasattr(d, 'A_ex'):
+                d.A_ex[i] = d.A_ex[i][sort_m]
+            if hasattr(d, 'D_ex'):
+                d.D_ex[i] = d.D_ex[i][sort_m]

@@ -30,7 +30,12 @@ Note:
 
 import numpy as np
 
-import phrates_c as cy
+try:
+    import phrates_c as cy
+except ImportError:
+    has_cython = False
+else:
+    has_cython = True
 try:
     from . import phrates_numba as nb
 except ImportError:

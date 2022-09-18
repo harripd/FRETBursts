@@ -118,7 +118,9 @@ def bsearch_py(times, L, m, T, slice_=None,
         # Correct burst-stop off by 1 when last burst does not finish
         i_stop += 1
         if i_stop - i_start + 1 >= L:
-            bursts.pop()
+            # check if the last burst was recorded, or if off-by one resulted in 1 less than necessary
+            if bursts[-1][0] == i_start:
+                bursts.pop()
             bursts.append((i_start, i_stop, times[i_start], times[i_stop]))
 
     bursts = np.array(bursts, dtype='int64')
@@ -247,7 +249,7 @@ class BurstGap(namedtuple('BurstGap',
         return self.istop - self.istart + 1 - self.gap_counts
 
 
-class Bursts(object):
+class Bursts:
     """A container for burst data.
 
     This class provides a container for burst data. It has a

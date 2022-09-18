@@ -225,9 +225,9 @@ def fit_varying_min_delta_ph(d, min_delta_ph_list, bg_fit_fun=exp_fit,
         (nch, nperiods, len(min_delta_ph_list)).
     """
 
-    BG = np.zeros((d.nch, d.nperiods, np.size(min_delta_ph_list)))
+    BG = np.zeros((d.nch, d.nperiods.max(), np.size(min_delta_ph_list)))
     BG_err = np.zeros_like(BG)
-    BG[:], BG_err[:] = None, None
+    BG[:], BG_err[:] = np.nan, np.nan
 
     for ich in range(d.nch):
         for period, ph in enumerate(
