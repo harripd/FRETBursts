@@ -484,6 +484,7 @@ class MultiFitter:
         if fit_tot:
             data_sum = self.hist_pdf_tot if pdf else self.hist_counts_tot
             self.fit_res_tot = self.model.fit(data_sum, x=self.hist_axis, **fit_kwargs)
+            self.params_tot = pd.DataFrame(self.fit_res_tot.values, index=[0])
         self.fit_res = []
         # init_params = copy.deepcopy(self.model.params)
         for i, data in enumerate(data_list):

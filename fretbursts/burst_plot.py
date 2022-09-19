@@ -1237,21 +1237,22 @@ def hist_burst_data(
                                label='KDE')
         kde_plot_style_.update(_normalize_kwargs(kde_plot_style,
                                                  kind='line2d'))
-        y = scale * fitter.kde[i](x)
+        kde = fitter.kde_tot(x) if i is None else fitter.kde[i](x)
+        y = scale * kde
         xx, yy = (y, x) if vertical else (x, y)
         ax.plot(xx, yy, **kde_plot_style_)
     if show_kde_peak:
         if i is None:
-            pline(fitter.kde_max_pos[-1], ls='--', color='orange')
+            pline(fitter.kde_max_pos_tot, ls='--', color='orange')
         else:
             pline(fitter.kde_max_pos[i], ls='--', color='orange')
 
     if show_fit_value or show_fit_stats:
         if fit_from == 'kde':
-            fit_arr = fitter.kde_max_pos
+            fit_arr = fitter.kde_max_pos_tot if i is None else fitter.kde_max_pos
         else:
             assert fit_from in fitter.params
-            fit_arr = fitter.params[fit_from]
+            fit_arr = fitter.params_tot[fit_from] if i is None else fitter.params[fit_from]
 
         if i == 0:
             if show_fit_stats:
@@ -1333,7 +1334,10 @@ def _plot_fit_text_ch(
         xtext_low=0.2, xtext_high=0.6, fontsize=16):
     """Plot a text box with ch and fit value."""
     if ax is None: ax = gca()
-    xtext = xtext_high if fit_arr[ich] < xtext_high else xtext_low
+    if ich is None:
+        xtext = xtext_high if fit_arr[0] < xtext_high else xtext_low
+    else:
+        xtext = xtext_high if fit_arr[ich] < xtext_high else xtext_low
     ax.text(xtext, 0.81, fmt_str % (ich+1, fit_arr[ich]),
             transform=ax.transAxes, fontsize=fontsize, bbox=bbox)
 
@@ -2289,6 +2293,7 @@ def dplot(d, func, **kwargs):
 def _alex_plot_style(g, colorbar=True,cmap=None, vmin=1, vmax=1000):
     """Set plot style and colorbar for an ALEX joint plot.
     """
+    print(type(g))
     dummy, ax_joint, ax_x, ax_y = g.get_children()
     ax_joint.set_xlabel("E")
     ax_joint.set_ylabel("S")
@@ -2304,10 +2309,10 @@ def _alex_plot_style(g, colorbar=True,cmap=None, vmin=1, vmax=1000):
     ax_y.locator_params(axis='x', tight=True, nbins=3)
     if colorbar:
         pos = ax_joint.get_position().get_points()
-        #X, Y = pos[:, 0], pos[:, 1]
-        #cax = plt.axes([1., Y[0], (X[1] - X[0]) * 0.045, Y[1] - Y[0]])
+        X, Y = pos[:, 0], pos[:, 1]
+        cax = g.add_axes([1., Y[0], (X[1] - X[0]) * 0.045, Y[1] - Y[0]])
         norm = Normalize(vmin=vmin, vmax=vmax)
-        g.colorbar(ScalarMappable(norm=norm, cmap=cmap))
+        g.colorbar(ScalarMappable(norm=norm, cmap=cmap), cax=cax)
 
 
 def _hist_bursts_marg( dx, i, E_name='E', S_name='S', **kwargs):
@@ -2439,12 +2444,12 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
             vmax = _alex_hexbin_vmax(jplot, vmax_fret=vmax_fret)
         jplot.set_clim(vmin, vmax)
     elif kind.startswith("kde"):
-        joint_kws_ = dict(shade=True, shade_lowest=False, n_levels=30,
-                          cmap=cmap, clip=(-0.4, 1.4), bw=0.03)
+        joint_kws_ = dict(fill=True, thresh=0.05, levels=30,
+                          cmap=cmap, clip=(-0.4, 1.4), bw_adjust=0.1)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = sns.kdeplot(x=E, y=S, ax=ax_joint, 
-                            **joint_kws_)
+        data = {'E':E, 'S':S}
+        jplot = sns.kdeplot(data=data, x='E', y='S', ax=ax_joint, **joint_kws_)
     anno_str = ''
     for mburst in d.mburst:
         anno_str = anno_str + f'# Bursts: {mburst.size}\n'
