@@ -33,6 +33,7 @@ For more examples refer to
 
 import warnings
 from itertools import cycle
+from collections.abc import Iterable
 
 # Numeric imports
 import numpy as np
@@ -456,7 +457,7 @@ def timetrace_single(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
             plt.ylim(bottom=-100)
         _plot_status['timetrace_single'] = {'autoscale': False}
 
-
+# do not concatenate, timetrace should always be shown per channel
 def timetrace(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
               bursts=False, burst_picker=True, scroll=False,
               show_rate_th=True, F=None, rate_th_style={'label': None},
@@ -556,7 +557,7 @@ def ratetrace_single(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
     iph1 = np.searchsorted(ph_times, tmin_clk)
     iph2 = np.searchsorted(ph_times, tmax_clk)
     if iph2 - iph1 > max_num_ph:
-        iph2 = iph1 + max_num_ph
+        iph2 = iph1 + int(max_num_ph)
         tmax = ph_times[iph2] * d.clk_p
         warnings.warn(('Max number of photons reached in ratetrace_single().'
                        '\n    tmax is reduced to %ds. To plot a wider '
@@ -596,7 +597,7 @@ def ratetrace_single(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
             plt.ylim(bottom=-100)
         _plot_status['ratetrace_single'] = {'autoscale': False}
 
-
+# same, must be plotted per channel always
 def ratetrace(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
               bursts=False, burst_picker=True, scroll=False,
               show_rate_th=True, F=None, rate_th_style={'label': None},
@@ -674,10 +675,11 @@ def sort_burst_sizes(sizes, levels=np.arange(1, 102, 20)):
     masks.append(sizes >= level2)
     return masks
 
+# plot per channel always
 def timetrace_fret(d, i=0, gamma=1., **kwargs):
     """Timetrace of burst FRET vs time. Uses `plot`."""
     b = d.mburst[i]
-    bsizes = bl.select_bursts.get_burst_size(d, ich=i, gamma=gamma)
+    bsizes = d.burst_sizes_ich(ich=i, gamma=gamma)
 
     style_kwargs = dict(marker='o', mew=0.5, color=blue, mec='grey',
                         alpha=0.4, ls='')
@@ -690,19 +692,20 @@ def timetrace_fret(d, i=0, gamma=1., **kwargs):
                  **style_kwargs)
     plt.plot(b.start*d.clk_p, d.E[i], '-k', alpha=0.1, lw=1)
     xlabel('Time (s)'); ylabel('E')
-    _gui_timetrace_burst_sel(d, i, timetrace_fret, gcf(), gca())
+    _gui_timetrace_burst_sel(d, gcf(), gca())
 
+# plot per channel always
 def timetrace_fret_scatter(d, i=0, gamma=1., **kwargs):
     """Timetrace of burst FRET vs time. Uses `scatter` (slow)."""
     b = d.mburst[i]
-    bsizes = d.burst_sizes_ich(d, ich=i, gamma=gamma)
+    bsizes = d.burst_sizes_ich(ich=i, gamma=gamma)
 
     style_kwargs = dict(s=bsizes, marker='o', alpha=0.5)
     style_kwargs.update(**kwargs)
     plt.scatter(b.start*d.clk_p, d.E[i], **style_kwargs)
     xlabel('Time (s)'); ylabel('E')
 
-
+# plot per channel always
 def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False):
     """Timetrace of background rates."""
     bg = d.bg_from(Ph_sel('all'))
@@ -733,7 +736,7 @@ def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False):
     plt.grid(True)
     plt.ylim(bottom=0)
 
-
+# plot per channel always
 def timetrace_b_rate(d, i=0):
     """Timetrace of bursts-per-second in each period."""
     t = arange(d.bg[i].size)*d.bg_time_s
@@ -748,11 +751,13 @@ def timetrace_b_rate(d, i=0):
     xlabel("Time (s)"); ylabel("Burst per second"); grid(True)
     plt.ylim(bottom=0)
 
+# plot per channel always
 def time_ph(d, i=0, num_ph=1e4, ph_istart=0):
     """Plot 'num_ph' ph starting at 'ph_istart' marking burst start/end.
     TODO: Update to use the new matplotlib eventplot.
     """
     b = d.mburst[i]
+    num_ph = int(num_ph)
     SLICE = slice(ph_istart, ph_istart+num_ph)
     ph_d = d.ph_times_m[i][SLICE][~d.A_em[i][SLICE]]
     ph_a = d.ph_times_m[i][SLICE][d.A_em[i][SLICE]]
@@ -779,7 +784,7 @@ def _bins_array(bins):
         bins = np.arange(*bins)
     return bins
 
-
+# not channel specific hidden function
 def _hist_burst_taildist(data, bins, pdf, weights=None, yscale='log',
                          color=None, label=None, plot_style=None, vline=None):
     hist = HistData(*np.histogram(data[~np.isnan(data)],
@@ -820,8 +825,11 @@ def hist_width(d, i=0, bins=(0, 10, 0.025), pdf=True, weights=None,
         vline (float): If not None, plot vertical line at the specified x
             position.
     """
-    weights = weights[i] if weights is not None else None
-    burst_widths = d.mburst[i].width * d.clk_p * 1e3
+    if i is None:
+        burst_widths = np.concatenate([mb.width for mb in d.mburst]) * d.clk_p * 1e3
+    else:
+        weights = weights[i] if weights is not None else None
+        burst_widths = d.mburst[i].width * d.clk_p * 1e3
 
     _hist_burst_taildist(burst_widths, bins, pdf, weights=weights, vline=vline,
                          yscale=yscale, color=color, plot_style=plot_style)
@@ -830,8 +838,8 @@ def hist_width(d, i=0, bins=(0, 10, 0.025), pdf=True, weights=None,
 
 
 def hist_brightness(d, i=0, bins=(0, 60, 1), pdf=True, weights=None,
-                    yscale='log', gamma=1, add_naa=False, beta=1.,
-                    donor_ref=True, add_aex=True, aex_corr=True,
+                    yscale='log', gamma=1, add_naa=False, ph_sel=Ph_sel('all'), beta=1.,
+                    donor_ref=True, naa_aexonly=False, naa_comp=False, na_comp=False,
                     label_prefix=None, color=None, plot_style=None, vline=None):
     """Plot histogram of burst brightness, i.e. burst size / duration.
 
@@ -845,12 +853,17 @@ def hist_brightness(d, i=0, bins=(0, 60, 1), pdf=True, weights=None,
         add_naa (bool): if True, include `naa` to the total burst size.
         donor_ref (bool): convention used for corrected burst size computation.
             See :meth:`fretbursts.burstlib.Data.burst_sizes_ich` for details.
-        add_aex (bool): *PAX-only*. Whether to add signal from Aex laser period
-            to the burst size. Default True.
-            See :meth:`fretbursts.burstlib.Data.burst_sizes_pax_ich`.
-        aex_corr (bool): *PAX-only*. If True, do duty-cycle correction
-            when adding the DAexAem term `naa`.
-            See :meth:`fretbursts.burstlib.Data.burst_sizes_pax_ich`.
+        na_comp (bool): **[PAX-only]** If True, multiply the `na` term
+            by `(1 + Wa/Wd)`, where Wa and Wd are the D and A alternation
+            durations (typically Wa/Wd = 1).
+        naa_aexonly (bool): **[PAX-only]** if True, the `naa` term is
+            corrected to include only A emission due to A excitation.
+            If False, the `naa` term includes all the counts in DAexAem.
+            The `naa` term also depends on the `naa_comp` argument.
+        naa_comp (bool): **[PAX-only]** If True, multiply the `naa` term by
+            `(1 + Wa/Wd)` where Wa and Wd are the D and A alternation
+            durations (typically Wa/Wd = 1). The `naa` term also depends on
+            the `naa_aexonly` argument.
         label_prefix (string or None): a custom prefix for the legend label.
         color (string or tuple or None): matplotlib color used for the plot.
         pdf (bool): if True, normalize the histogram to obtain a PDF.
@@ -863,10 +876,14 @@ def hist_brightness(d, i=0, bins=(0, 60, 1), pdf=True, weights=None,
     if plot_style is None:
         plot_style = {}
 
-    burst_widths = d.mburst[i].width * d.clk_p * 1e3
+    if i is None:
+        burst_widths = np.concatenate([mb.width for mb in d.mburst]) * d.clk_p * 1e3
+    else:
+        burst_widths = d.mburst[i].width * d.clk_p * 1e3
     sizes, label = _get_sizes_and_formula(
         d=d, ich=i, gamma=gamma, beta=beta, donor_ref=donor_ref,
-        add_naa=add_naa, add_aex=add_aex, aex_corr=aex_corr)
+        add_naa=add_naa, ph_sel=ph_sel, naa_aexonly=naa_aexonly,
+        naa_comp=naa_comp, na_comp=na_comp)
     brightness = sizes / burst_widths
     label = '$(' + label[1:-1] + ') / w$'
     if label_prefix is not None:
@@ -891,10 +908,17 @@ def _get_sizes_and_formula(d, ich, gamma, beta, donor_ref, add_naa,
     if 'PAX' in d.meas_type and ph_sel is not None:
         kws_pax = dict(ph_sel=ph_sel, naa_aexonly=naa_aexonly,
                        naa_comp=naa_comp, na_comp=na_comp)
-        sizes = d.burst_sizes_pax_ich(ich=ich, **dict(kws, **kws_pax))
+        if ich is None:
+            sizes = np.concatenate([d.burst_sizes_pax_ich(ich=i, **dict(kws, **kws_pax)) for i in range(d.nch)])
+        else:
+            sizes = d.burst_sizes_pax_ich(ich=ich, **dict(kws, **kws_pax))
         label = '$ %s $' % d._burst_sizes_pax_formula(**dict(kws, **kws_pax))
     else:
-        sizes = d.burst_sizes_ich(ich=ich, add_naa=add_naa, **kws)
+        if ich is None:
+            sizes = np.concatenate([d.burst_sizes_ich(ich=i, add_naa=add_naa, **kws) 
+                                    for i in range(d.nch)])
+        else:
+            sizes = d.burst_sizes_ich(ich=ich, add_naa=add_naa, **kws)
         label = label.format(FD='n_d', FA='n_a')
         if add_naa:
             corr = '(\\gamma\\beta) ' if donor_ref else '\\beta '
@@ -902,6 +926,7 @@ def _get_sizes_and_formula(d, ich, gamma, beta, donor_ref, add_naa,
     return sizes, label
 
 
+# dependent on _hist_burst_taildist
 def hist_size(d, i=0, which='all', bins=(0, 600, 4), pdf=False, weights=None,
               yscale='log', gamma=1, beta=1, donor_ref=True, add_naa=False,
               ph_sel=None, naa_aexonly=False, naa_comp=False, na_comp=False,
@@ -961,7 +986,7 @@ def hist_size(d, i=0, which='all', bins=(0, 600, 4), pdf=False, weights=None,
             add_naa=add_naa, ph_sel=ph_sel, naa_aexonly=naa_aexonly,
             naa_comp=naa_comp, na_comp=na_comp)
     else:
-        sizes = d[which][i]
+        sizes = np.concatenate(d[which]) if i is None else d[which][i]
         label = which
 
     # Use default label (with optional prefix) only if not explicitly
@@ -983,7 +1008,7 @@ def hist_size(d, i=0, which='all', bins=(0, 600, 4), pdf=False, weights=None,
     if legend:
         plt.legend(loc='upper right')
 
-
+# depends on  _hist_burst_taildist
 def hist_size_all(d, i=0, **kwargs):
     """Plot burst sizes for all the combinations of photons.
 
@@ -1152,10 +1177,10 @@ def hist_burst_data(
     fitter.histogram(binwidth=binwidth, bins=bins, verbose=verbose)
     if pdf:
         ylabel('PDF')
-        hist_vals = fitter.hist_pdf[i]
+        hist_vals = fitter.hist_pdf_tot if i is None else fitter.hist_pdf[i]
     else:
         ylabel('# Bursts')
-        hist_vals = fitter.hist_counts[i]
+        hist_vals = fitter.hist_counts_tot if i is None else fitter.hist_counts[i]
     xlabel(data_name)
     if data_name in ['E', 'S']:
         xlim(-0.19, 1.19)
@@ -1181,13 +1206,16 @@ def hist_burst_data(
         if pdf:
             scale = 1
         else:
-            scale = fitter.hist_binwidth * d.num_bursts[i]
+            if i is None:
+                scale = fitter.hist_binwidth * sum(d.num_bursts)
+            else:
+                scale = fitter.hist_binwidth * d.num_bursts[i]
 
     if show_model:
         model_plot_style_ = dict(color='k', alpha=0.8, label='Model')
         model_plot_style_.update(_normalize_kwargs(model_plot_style,
                                                    kind='line2d'))
-        fit_res = fitter.fit_res[i]
+        fit_res = fitter.fit_res_tot if i is None else fitter.fit_res[i]
         x = fitter.x_axis
         y = fit_res.model.eval(x=x, **fit_res.values)
         xx, yy = (y, x) if vertical else (x, y)
@@ -1209,18 +1237,22 @@ def hist_burst_data(
                                label='KDE')
         kde_plot_style_.update(_normalize_kwargs(kde_plot_style,
                                                  kind='line2d'))
-        y = scale * fitter.kde[i](x)
+        kde = fitter.kde_tot(x) if i is None else fitter.kde[i](x)
+        y = scale * kde
         xx, yy = (y, x) if vertical else (x, y)
         ax.plot(xx, yy, **kde_plot_style_)
     if show_kde_peak:
-        pline(fitter.kde_max_pos[i], ls='--', color='orange')
+        if i is None:
+            pline(fitter.kde_max_pos_tot, ls='--', color='orange')
+        else:
+            pline(fitter.kde_max_pos[i], ls='--', color='orange')
 
     if show_fit_value or show_fit_stats:
         if fit_from == 'kde':
-            fit_arr = fitter.kde_max_pos
+            fit_arr = fitter.kde_max_pos_tot if i is None else fitter.kde_max_pos
         else:
             assert fit_from in fitter.params
-            fit_arr = fitter.params[fit_from]
+            fit_arr = fitter.params_tot[fit_from] if i is None else fitter.params[fit_from]
 
         if i == 0:
             if show_fit_stats:
@@ -1229,6 +1261,7 @@ def hist_burst_data(
         if show_fit_value:
             _plot_fit_text_ch(fit_arr, i, ax=ax)
 
+# depends on hist_burst_data
 def hist_fret(
         d, i=0, ax=None, binwidth=0.03, bins=None, pdf=True,
         hist_style='bar',
@@ -1257,6 +1290,7 @@ def hist_fret(
         model_plot_style=model_plot_style, kde_plot_style=kde_plot_style,
         verbose=verbose)
 
+# depends on hist_burst_data
 def hist_S(
         d, i=0, ax=None, binwidth=0.03, bins=None, pdf=True,
         hist_style='bar',
@@ -1284,6 +1318,7 @@ def hist_S(
         model_plot_style=model_plot_style, kde_plot_style=kde_plot_style,
         verbose=verbose)
 
+# should not depend on channel
 def _get_fit_text_stats(fit_arr, pylab=True):
     """Return a formatted string for mean E and max delta-E."""
     delta = (fit_arr.max() - fit_arr.min())*100
@@ -1292,13 +1327,17 @@ def _get_fit_text_stats(fit_arr, pylab=True):
     if pylab: fit_text = r'$'+fit_text+r'$'
     return fit_text
 
+
 def _plot_fit_text_ch(
         fit_arr, ich, fmt_str="CH%d: $E_{fit} = %.3f$", ax=None,
         bbox=dict(boxstyle='round', facecolor='#dedede', alpha=0.5),
         xtext_low=0.2, xtext_high=0.6, fontsize=16):
     """Plot a text box with ch and fit value."""
     if ax is None: ax = gca()
-    xtext = xtext_high if fit_arr[ich] < xtext_high else xtext_low
+    if ich is None:
+        xtext = xtext_high if fit_arr[0] < xtext_high else xtext_low
+    else:
+        xtext = xtext_high if fit_arr[ich] < xtext_high else xtext_low
     ax.text(xtext, 0.81, fmt_str % (ich+1, fit_arr[ich]),
             transform=ax.transAxes, fontsize=fontsize, bbox=bbox)
 
@@ -1312,7 +1351,8 @@ def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
     """
     ax = plt.gca()
     d._calc_alex_hist(binwidth)
-    ES_hist, E_bins, S_bins, S_ax = d.ES_hist[i], d.E_bins, d.S_bins, d.S_ax
+    ES_hist = np.sum(d.ES_hist, axis=0) if i is None else d.ES_hist[i]
+    E_bins, S_bins, S_ax = d.E_bins, d.S_bins, d.S_ax
 
     colormap = plt.get_cmap(cmap)
     # Heuristic for colormap range
@@ -1322,7 +1362,9 @@ def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
         if vmax <= vmin: vmax = 10*vmin
 
     if scatter:
-        ax.plot(d.E[i], d.S[i], 'o', mew=0, ms=scatter_ms,
+        E = np.concatenate(d.E) if i is None else d.E[i]
+        S = np.concatenate(d.S) if i is None else d.S[i]
+        ax.plot(E, S, 'o', mew=0, ms=scatter_ms,
                 alpha=scatter_alpha, color=scatter_color)
     im = ax.imshow(ES_hist[:, ::-1].T, interpolation=interp,
                    extent=(E_bins[0], E_bins[-1], S_bins[0], S_bins[-1]),
@@ -1347,18 +1389,22 @@ def hexbin_alex(d, i=0, vmin=1, vmax=None, gridsize=80, cmap='Spectral_r',
                 E_name='E', S_name='S', **hexbin_kwargs):
     """Plot an hexbin 2D histogram for E-S.
     """
-    if d.num_bursts[i] < 1:
+    if i is None:
+        E, S = np.concatenate(d[E_name]), np.concatenate(d[S_name])
+    else:
+        E, S = d[E_name][i], d[S_name][i]
+    if E.size < 1:
         return
     hexbin_kwargs_ = dict(edgecolor='none', linewidth=0.2, gridsize=gridsize,
                           cmap=cmap, extent=(-0.2, 1.2, -0.2, 1.2), mincnt=1)
     if hexbin_kwargs is not None:
         hexbin_kwargs_.update(_normalize_kwargs(hexbin_kwargs))
-    poly = plt.hexbin(d[E_name][i], d[S_name][i], **hexbin_kwargs_)
+    poly = plt.hexbin(E, S, **hexbin_kwargs_)
     poly.set_clim(vmin, vmax)
     plt.xlabel('E')
     plt.ylabel('S')
 
-
+# channel independent
 def plot_ES_selection(ax, E1, E2, S1, S2, rect=True, **kwargs):
     """Plot an overlay ROI on top of an E-S plot (i.e. ALEX histogram).
 
@@ -1398,6 +1444,7 @@ def plot_ES_selection(ax, E1, E2, S1, S2, rect=True, **kwargs):
     ax.add_patch(ellips)
     return rect, ellips
 
+# channel independent
 def get_ES_range():
     """Get the range of ES histogram selected via GUI.
 
@@ -1408,7 +1455,6 @@ def get_ES_range():
         sel = hist2d_alex.gui_sel.selection
         print('E1={E1:.3}, E2={E2:.3}, S1={S1:.3}, S2={S2:.3}'.format(**sel))
     return sel
-
 
 def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
                             ph_sel=Ph_sel('all'), period=None,
@@ -1450,8 +1496,13 @@ def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
 
     # Compute interphoton delays
     if period is None:
-        ph_times = d.get_ph_times(ich=i, ph_sel=ph_sel)
+        if i is None:
+            ph_times = np.concatenate([d.get_ph_times(ich=j,ph_sel=ph_sel) for j in range(d.nch)])
+        else:
+            ph_times = d.get_ph_times(ich=i, ph_sel=ph_sel)
     else:
+        if i is None:
+            raise RuntimeError("Must specify channel/spot when specifying period")
         ph_times = d.get_ph_times_period(ich=i, period=period, ph_sel=ph_sel)
     delta_ph_t = np.diff(ph_times) * d.clk_p
     if tmax is None:
@@ -1538,7 +1589,8 @@ def hist_interphoton(d, i=0, binwidth=1e-4, tmax=None, bins=None, period=None,
             ph_sel_list.append(Ph_sel(Aex='Dem'))
 
     for ix, ph_sel in enumerate(ph_sel_list):
-        if not bl.mask_empty(d.get_ph_mask(i, ph_sel=ph_sel)):
+        sl = range(d.nch) if i is None else (i, )
+        if not np.all([bl.mask_empty(d.get_ph_mask(j, ph_sel=ph_sel)) for j in sl]):
             hist_interphoton_single(d, i=i, binwidth=binwidth, tmax=tmax,
                                     bins=bins, period=period, ph_sel=ph_sel,
                                     yscale=yscale, xscale=xscale, xunit=xunit,
@@ -1549,7 +1601,7 @@ def hist_interphoton(d, i=0, binwidth=1e-4, tmax=None, bins=None, period=None,
     if yscale == 'log' or xscale == 'log':
         _plot_status['hist_interphoton'] = {'autoscale': False}
 
-
+# TODO: condsider better method for displaying all channel, total bg histogram
 def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
                    ph_sel=Ph_sel('all'), period=0,
                    yscale='log', xscale='linear', xunit='ms', plot_style=None,
@@ -1642,31 +1694,63 @@ def hist_bg(d, i=0, binwidth=1e-4, tmax=0.01, bins=None, period=0,
 def hist_ph_delays(
         d, i=0, time_min_s=0, time_max_s=30, bin_width_us=10, mask=None,
         yscale='log', hfit_bin_ms=1, efit_tail_min_us=1000, **kwargs):
-    """Histog. of ph delays and comparison with 3 BG fitting functions.
+    """Histogram of ph delays and comparison with 3 BG fitting functions.
     """
-    ph = d.ph_times_m[i].copy()
-    if mask is not None: ph = ph[mask[i]]
-    ph = ph[(ph < time_max_s/d.clk_p)*(ph > time_min_s/d.clk_p)]
+    if i is None:
+        if mask is None:
+            mask = (slice(None) for _ in range(d.nch))
+        ph = (times[msk].copy() for times, msk in zip(d.ph_times_m, mask))
+        print("next")
+        if not isinstance(time_min_s, Iterable):
+            time_min_sg = (time_min_s for _ in range(d.nch))
+            print("next")
+        if not isinstance(time_max_s, Iterable):
+            time_max_sg = (time_max_s for _ in range(d.nch))
+            print("next")
+        ph = np.concatenate([p[(p < tmax/d.clk_p)*(p > tmin/d.clk_p)] 
+                             for p, tmax, tmin in zip(ph, time_max_sg, time_min_sg)])
+    else:
+        ph = d.ph_times_m[i].copy()
+        if mask is not None: 
+            ph = ph[mask[i]]
+        ph = ph[(ph < time_max_s/d.clk_p)*(ph > time_min_s/d.clk_p)]
     dph = np.diff(ph)*d.clk_p
     H = hist(dph*1e6, bins=r_[0:1200:bin_width_us], histtype='step', **kwargs)
     gca().set_yscale('log')
     xlabel(u'Ph delay time (μs)'); ylabel("# Ph")
+    F = 1 if 'normed' in kwargs else H[0].sum()*(bin_width_us)
 
     efun = lambda t, r: np.exp(-r*t)*r
-    re = bg.exp_fit(ph, tail_min_us=efit_tail_min_us)
-    rg = bg.exp_hist_fit(ph, tail_min_us=efit_tail_min_us, binw=hfit_bin_ms*1e3)
-    rc = bg.exp_cdf_fit(ph, tail_min_us=efit_tail_min_us)
+    try:
+        re = bg.exp_fit(ph, tail_min_us=efit_tail_min_us)[0]
+        re_do = True
+    except:
+        re_do = False
+    try:
+        rg = bg.exp_hist_fit(ph, tail_min_us=efit_tail_min_us, binw=hfit_bin_ms*1e-3)[0]
+        rg_do = True
+    except:
+        rg_do = False
+    try:
+        rc = bg.exp_cdf_fit(ph, tail_min_us=efit_tail_min_us)[0]
+        rc_do = True
+    except:
+        rc_do = False
     t = r_[0:1200]*1e-6
-    F = 1 if 'normed' in kwargs else H[0].sum()*(bin_width_us)
-    plot(t*1e6, 0.65*F*efun(t, rc)*1e-6, lw=3, alpha=0.5, color=purple,
-         label="%d cps - Exp CDF (tail_min_p=%.2f)" % (rc, efit_tail_min_us))
-    plot(t*1e6, 0.65*F*efun(t, re)*1e-6, lw=3, alpha=0.5, color=red,
-         label="%d cps - Exp ML (tail_min_p=%.2f)" % (re, efit_tail_min_us))
-    plot(t*1e6, 0.68*F*efun(t, rg)*1e-6, lw=3, alpha=0.5, color=green,
-         label=u"%d cps - Hist (bin_ms=%d) [Δ=%d%%]" % (hfit_bin_ms, rg,
-                                                        100*(rg-re)/re))
+    
+    if rc_do:
+        plot(t*1e6, 0.65*F*efun(t, rc)*1e-6, lw=3, alpha=0.5, color=purple,
+             label="%d cps - Exp CDF (tail_min_p=%.2f)" % (rc, efit_tail_min_us))
+    if re_do:
+        plot(t*1e6, 0.65*F*efun(t, re)*1e-6, lw=3, alpha=0.5, color=red,
+             label="%d cps - Exp ML (tail_min_p=%.2f)" % (re, efit_tail_min_us))
+    if re_do and rg_do:
+        plot(t*1e6, 0.68*F*efun(t, rg)*1e-6, lw=3, alpha=0.5, color=green,
+             label=u"%d cps - Hist (bin_ms=%d) [Δ=%d%%]" % (hfit_bin_ms, rg,
+                                                            100*(rg-re)/re))
     plt.legend(loc='best', fancybox=True)
 
+# TODO: update for concatenated data, probably fix bext.calc_mdelays_hist
 def hist_mdelays(d, i=0, m=10, bins_s=(0, 10, 0.02), period=0,
                  hold=False, bg_ppf=0.01, ph_sel=Ph_sel('all'), spline=True,
                  s=1., bg_fit=True, bg_F=0.8):
@@ -1677,9 +1761,15 @@ def hist_mdelays(d, i=0, m=10, bins_s=(0, 10, 0.02), period=0,
         #ax.clear()
         for _ind in range(len(ax.lines)): ax.lines.pop()
 
-    results = bext.calc_mdelays_hist(
-        d=d, ich=i, m=m, period=period, bins_s=bins_s,
-        ph_sel=ph_sel, bursts=True, bg_fit=bg_fit, bg_F=bg_F)
+    if i is None:
+        results = np.concatenate([bext.calc_mdelays_hist(d, ich=j, m=m, period=period, 
+                                                          bins_s=bins_s,ph_sel=ph_sel, 
+                                                          bursts=True, bg_fit=bg_fit, 
+                                                          bg_F=bg_F) 
+                                  for j in range(d.nch)])
+    else:
+        results = bext.calc_mdelays_hist(d, ich=i, m=m, period=period, bins_s=bins_s,
+                                         ph_sel=ph_sel, bursts=True, bg_fit=bg_fit, bg_F=bg_F)
     bin_x, histog_y = results[:2]
     bg_dist = results[2]
     rate_ch_kcps = 1./bg_dist.kwds['scale']  # extract the rate
@@ -1746,11 +1836,18 @@ def hist_mrates(d, i=0, m=10, bins=(0, 4000, 100), yscale='log', pdf=False,
                 dense=True, plot_style=None):
     """Histogram of m-photons rates. See also :func:`hist_mdelays`.
     """
-    ph = d.get_ph_times(ich=i)
-    if dense:
-        ph_mrates = 1.*m/((ph[m-1:]-ph[:ph.size-m+1])*d.clk_p*1e3)
+    if i is None:
+        ph = [d.get_ph_times(ich=j) for j in range(d.nch)]
+        if dense:
+            ph_mrates = np.concatenate([1.*m/(p[m-1:]-p[:p.size-m+1]*1e3*d.clk_p) for p in ph])
+        else:
+            ph_mrates = np.concatenate([1.*m/(np.diff(p[::m])*1e3*d.clk_p) for p in ph])
     else:
-        ph_mrates = 1.*m/(np.diff(ph[::m])*d.clk_p*1e3)
+        ph = d.get_ph_times(ich=i)
+        if dense:
+            ph_mrates = 1.*m/((ph[m-1:]-ph[:ph.size-m+1])*d.clk_p*1e3)
+        else:
+            ph_mrates = 1.*m/(np.diff(ph[::m])*d.clk_p*1e3)
 
     hist = HistData(*np.histogram(ph_mrates, bins=_bins_array(bins)))
     ydata = hist.pdf if pdf else hist.counts
@@ -1765,10 +1862,14 @@ def hist_sbr(d, i=0, bins=(0, 30, 1), pdf=True, weights=None, color=None,
              plot_style=None):
     """Histogram of per-burst Signal-to-Background Ratio (SBR).
     """
-    weights = weights[i] if weights is not None else None
+    if i is None:
+        weights = np.concatenate(weights) if weights is not None else None
+    else:
+        weights = weights[i] if weights is not None else None
     if 'sbr' not in d:
         d.calc_sbr()
-    _hist_burst_taildist(d.sbr[i], bins, pdf, weights=weights, color=color,
+    sbr = np.concatenate(d.sbr) if i is None else d.sbr[i]
+    _hist_burst_taildist(sbr, bins, pdf, weights=weights, color=color,
                          plot_style=plot_style)
     plt.xlabel('SBR')
 
@@ -1783,8 +1884,9 @@ def hist_burst_phrate(d, i=0, bins=(0, 1000, 20), pdf=True, weights=None,
     else:
         if 'max_rate' not in d:
             d.calc_max_rate(m=10)
-        max_rate = d.max_rate
-    _hist_burst_taildist(max_rate[i] * 1e-3, bins, pdf, weights=weights,
+        max_rate = np.concatenate(d.max_rate) if i is None else d.max_rate[i]
+    
+    _hist_burst_taildist(max_rate * 1e-3, bins, pdf, weights=weights,
                          color=color, plot_style=plot_style, vline=vline)
     plt.xlabel('Peak rate (kcps)')
 
@@ -1793,8 +1895,12 @@ def hist_burst_delays(d, i=0, bins=(0, 10, 0.2), pdf=False, weights=None,
                       color=None, plot_style=None):
     """Histogram of waiting times between bursts.
     """
-    weights = weights[i] if weights is not None else None
-    bdelays = np.diff(d.mburst[i].start*d.clk_p)
+    if i is None:
+        weights = np.concatenate(weights) if weights is not None else None
+        bdelays = np.concatenate([np.diff(mburst.start*d.clk_p) for mburst in d.mburst])
+    else:
+        weights = weights[i] if weights is not None else None
+        bdelays = np.diff(d.mburst[i].start*d.clk_p)
 
     _hist_burst_taildist(bdelays, bins, pdf, weights=weights, color=color,
                          plot_style=plot_style)
@@ -1802,10 +1908,13 @@ def hist_burst_delays(d, i=0, bins=(0, 10, 0.2), pdf=False, weights=None,
 
 ## Burst internal "symmetry"
 def hist_asymmetry(d, i=0, bin_max=2, binwidth=0.1, stat_func=np.median):
-    burst_asym = bext.asymmetry(d, ich=i, func=stat_func)
+    if i is None:
+        burst_asym = np.concatenate([bext.asymmetry(d, ich=j, func=stat_func) for j in range(d.nch)])
+    else:
+        burst_asym = bext.asymmetry(d, ich=i, func=stat_func)
     bins_pos = np.arange(0, bin_max+binwidth, binwidth)
     bins = np.hstack([-bins_pos[1:][::-1], bins_pos])
-    izero = (bins.size - 1)/2.
+    izero = int((bins.size - 1)/2)
     assert izero == np.where(np.abs(bins) < 1e-8)[0]
 
     counts, _ = np.histogram(burst_asym, bins=bins)
@@ -1832,69 +1941,105 @@ def hist_asymmetry(d, i=0, bin_max=2, binwidth=0.1, stat_func=np.median):
 
 def scatter_width_size(d, i=0):
     """Scatterplot of burst width versus size."""
-    b = d.mburst[i]
-    plot(b.width*d.clk_p*1e3, d.nt[i], 'o', mew=0, ms=3, alpha=0.7,
-         color='blue')
     t_ms = arange(0, 50)
-    plot(t_ms, ((d.m)/(d.T[i]))*t_ms*1e-3, '--', lw=2, color='k',
-         label='Slope = m/T = min. rate = %1.0f cps' % (d.m/d.T[i]))
-    plot(t_ms, d.bg_mean[Ph_sel('all')][i]*t_ms*1e-3, '--', lw=2, color=red,
+    if i is None:
+        b = np.concatenate([bb.width*d.clk_p*1e3 for bb in d.mburst])
+        nt = np.concatenate(d.nt)
+        T = np.average(d.T, weights=[ph.max()-ph.min() for ph in d.ph_times_m])
+        bg_mean = np.average(d.bg_mean[Ph_sel('all')], weights=[ph.max()-ph.min() for ph in d.ph_times_m])
+        bg_mean = bg_mean*t_ms*1e-3
+    else:
+        b = d.mburst[i].width*d.clk_p*1e3
+        nt = d.nt[i]
+        T = d.T[i]
+        bg_mean = d.bg_mean[Ph_sel('all')][i]*t_ms*1e-3
+    plot(b, nt, 'o', mew=0, ms=3, alpha=0.7,
+         color='blue')
+    
+    plot(t_ms, ((d.m)/(T))*t_ms*1e-3, '--', lw=2, color='k',
+         label='Slope = m/T = min. rate = %1.0f cps' % (d.m/T))
+    plot(t_ms, bg_mean, '--', lw=2, color=red,
          label='Noise rate: BG*t')
     xlabel('Burst width (ms)'); ylabel('Burst size (# ph.)')
     plt.xlim(0, 10); plt.ylim(0, 300)
     legend(frameon=False)
 
+
 def scatter_rate_da(d, i=0):
     """Scatter of nd rate vs na rate (rates for each burst)."""
-    b = d.mburst[i]
-    Rate = lambda nX: nX[i]/b.width/d.clk_p*1e-3
-    plot(Rate(d.nd), Rate(d.na), 'o', mew=0, ms=3, alpha=0.1, color='blue')
+    bw = np.concatenate([burst.width for burst in d.mburst]) if i is None else d.mburst[i].width
+    nd = np.concatenate(d.nd) if i is None else d.nd[i]
+    na = np.concatenate(d.na) if i is None else d.na[i]
+    Rate = lambda nX: nX/bw/d.clk_p*1e-3
+    plot(Rate(nd), Rate(na), 'o', mew=0, ms=3, alpha=0.1, color='blue')
     xlabel('D burst rate (kcps)'); ylabel('A burst rate (kcps)')
     plt.xlim(-20, 100); plt.ylim(-20, 100)
     legend(frameon=False)
+
 
 def scatter_fret_size(d, i=0, which='all', gamma=1, add_naa=False,
                       plot_style=None):
     """Scatterplot of FRET efficiency versus burst size.
     """
     if which == 'all':
-        size = d.burst_sizes_ich(ich=i, gamma=gamma, add_naa=add_naa)
+        if i is None:
+            size = np.concatenate([d.burst_sizes_ich(ich=j, gamma=gamma, add_naa=add_naa) 
+                                   for j in range(d.nch)])
+        else:
+            size = d.burst_sizes_ich(ich=i, gamma=gamma, add_naa=add_naa)
     else:
         assert which in d
-        size = d[which][i]
+        size = np.concatenate([d[which][j] for j in range(d.nch)]) if i is None else d[which][i]
 
     plot_style_ = dict(linestyle='', alpha=0.1, color=blue,
                        marker='o', markeredgewidth=0, markersize=3)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plot(d.E[i], size, **plot_style_)
+    E = np.concatenate(d.E) if i is None else d.E[i]
+    plot(E, size, **plot_style_)
     xlabel("FRET Efficiency (E)")
     ylabel("Corrected Burst size (#ph)")
+
 
 def scatter_fret_nd_na(d, i=0, gamma=1., **kwargs):
     """Scatterplot of FRET versus gamma-corrected burst size."""
     default_kwargs = dict(mew=0, ms=3, alpha=0.3, color=blue)
     default_kwargs.update(**kwargs)
-    plot(d.E[i], gamma*d.nd[i]+d.na[i], 'o', **default_kwargs)
+    E = np.concatenate(d.E) if i is None else d.E[i]
+    nd = np.concatenate(d.nd) if i is None else d.nd[i]
+    na = np.concatenate(d.na) if i is None else d.na[i]
+    plot(E, gamma*nd+na, 'o', **default_kwargs)
     xlabel("FRET Efficiency (E)")
     ylabel("Burst size (#ph)")
 
+
 def scatter_fret_width(d, i=0):
     """Scatterplot of FRET versus burst width."""
-    b = d.mburst[i]
-    plot(d.E[i], (b[:, 1]*d.clk_p)*1e3, 'o', mew=0, ms=3, alpha=0.1,
+    if i is None:        
+        b = np.concatenate([mburst.width for mburst in d.mburst])*d.clk_p*1e3
+        E = np.concatenate(d.E)
+    else:
+        b = d.mburst[i].width*d.clk_p*1e3
+        E = d.E[i]
+    plot(E, b, 'o', mew=0, ms=3, alpha=0.1,
          color="blue")
     xlabel("FRET Efficiency (E)")
     ylabel("Burst width (ms)")
 
+
 def scatter_da(d, i=0, alpha=0.3):
     """Scatterplot of donor vs acceptor photons (nd, vs na) in each burst."""
-    plot(d.nd[i], d.na[i], 'o', mew=0, ms=3, alpha=alpha, color='blue')
+    nd = np.concatenate(d.nd) if i is None else d.nd[i]
+    na = np.concatenate(d.na) if i is None else d.na[i]
+    plot(nd, na, 'o', mew=0, ms=3, alpha=alpha, color='blue')
     xlabel('# donor ph.'); ylabel('# acceptor ph.')
     plt.xlim(-5, 200); plt.ylim(-5, 120)
 
+
 def scatter_naa_nt(d, i=0, alpha=0.5):
     """Scatterplot of nt versus naa."""
-    plot(d.nt[i], d.naa[i], 'o', mew=0, ms=3, alpha=alpha, color='blue')
+    nt = np.concatenate(d.nt) if i is None else d.nt[i]
+    naa = np.concatenate(d.naa) if i is None else d.naa[i]
+    plot(nt, naa, 'o', mew=0, ms=3, alpha=alpha, color='blue')
     plot(arange(200), color='k', lw=2)
     xlabel('Total burst size (nd+na+naa)'); ylabel('Accept em-ex BS (naa)')
     plt.xlim(-5, 200); plt.ylim(-5, 120)
@@ -1905,7 +2050,9 @@ def scatter_alex(d, i=0, **kwargs):
                       alpha=0.1)
     plot_style = _normalize_kwargs(plot_style, 'line2d')
     plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
-    plot(d.E[i], d.S[i], 'o', **plot_style)
+    E = np.concatenate(d.E) if i is None else d.E[i]
+    S = np.concatenate(d.S) if i is None else d.S[i]
+    plot(E, S, 'o', **plot_style)
     xlabel("E"); ylabel('S')
     plt.xlim(-0.2, 1.2); plt.ylim(-0.2, 1.2)
 
@@ -2130,7 +2277,7 @@ def dplot(d, func, **kwargs):
         nch = d.shape[1]
     else:
         nch = d.nch
-    if nch == 1:
+    if "i" in kwargs or nch == 1:
         return dplot_1ch(d=d, func=func, **kwargs)
     elif nch <= 8:
         return dplot_8ch(d=d, func=func, **kwargs)
@@ -2146,6 +2293,7 @@ def dplot(d, func, **kwargs):
 def _alex_plot_style(g, colorbar=True,cmap=None, vmin=1, vmax=1000):
     """Set plot style and colorbar for an ALEX joint plot.
     """
+    print(type(g))
     dummy, ax_joint, ax_x, ax_y = g.get_children()
     ax_joint.set_xlabel("E")
     ax_joint.set_ylabel("S")
@@ -2161,10 +2309,10 @@ def _alex_plot_style(g, colorbar=True,cmap=None, vmin=1, vmax=1000):
     ax_y.locator_params(axis='x', tight=True, nbins=3)
     if colorbar:
         pos = ax_joint.get_position().get_points()
-        #X, Y = pos[:, 0], pos[:, 1]
-        #cax = plt.axes([1., Y[0], (X[1] - X[0]) * 0.045, Y[1] - Y[0]])
+        X, Y = pos[:, 0], pos[:, 1]
+        cax = g.add_axes([1., Y[0], (X[1] - X[0]) * 0.045, Y[1] - Y[0]])
         norm = Normalize(vmin=vmin, vmax=vmax)
-        g.colorbar(ScalarMappable(norm=norm, cmap=cmap))
+        g.colorbar(ScalarMappable(norm=norm, cmap=cmap), cax=cax)
 
 
 def _hist_bursts_marg( dx, i, E_name='E', S_name='S', **kwargs):
@@ -2265,6 +2413,9 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
     ax_horiz = g.add_subplot(gs[0,0:3],sharex=ax_joint)
     ax_verti = g.add_subplot(gs[1:4,3],sharey=ax_joint)
     
+    E = np.concatenate(d[E_name]) if i is None else d[E_name][i]
+    S = np.concatenate(d[S_name]) if i is None else d[S_name][i]
+    
     if isinstance(marginal_color, int):
         histcolor = sns.color_palette(cmap, 100)[marginal_color]
     else:
@@ -2280,25 +2431,25 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
         joint_kws_ = dict(s=40, color=histcolor, alpha=0.1, linewidths=0)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = ax_joint.scatter(d[E_name][i], d[S_name][i], **joint_kws_)
+        jplot = ax_joint.scatter(E, S, **joint_kws_)
     elif kind.startswith('hex'):
         joint_kws_ = dict(edgecolor='none', linewidth=0.2, gridsize=gridsize,
                           cmap=cmap, extent=(-0.2, 1.2, -0.2, 1.2), mincnt=1)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = ax_joint.hexbin(d[E_name][i], d[S_name][i], **joint_kws_)
+        jplot = ax_joint.hexbin(E, S, **joint_kws_)
 
         # Set the vmin and vmax values for the colormap
         if vmax is None:
             vmax = _alex_hexbin_vmax(jplot, vmax_fret=vmax_fret)
         jplot.set_clim(vmin, vmax)
     elif kind.startswith("kde"):
-        joint_kws_ = dict(shade=True, shade_lowest=False, n_levels=30,
-                          cmap=cmap, clip=(-0.4, 1.4), bw=0.03)
+        joint_kws_ = dict(fill=True, thresh=0.05, levels=30,
+                          cmap=cmap, clip=(-0.4, 1.4), bw_adjust=0.1)
         if joint_kws is not None:
             joint_kws_.update(_normalize_kwargs(joint_kws))
-        jplot = sns.kdeplot(x=d[E_name][0], y= d[S_name][0], ax=ax_joint, 
-                            **joint_kws_)
+        data = {'E':E, 'S':S}
+        jplot = sns.kdeplot(data=data, x='E', y='S', ax=ax_joint, **joint_kws_)
     anno_str = ''
     for mburst in d.mburst:
         anno_str = anno_str + f'# Bursts: {mburst.size}\n'

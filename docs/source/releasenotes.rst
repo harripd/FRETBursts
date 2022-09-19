@@ -11,6 +11,9 @@ Version 0.7.1 (unreleased)
 - More fixes for PIE file with polarization, thanks to Christian Gebhardt 
   for reporting the problem and suggesting solutions 
   (`issue <https://github.com/OpenSMFS/FRETBursts/issues/25>`__)
+- Passing list of strings to `loader.photon_hdf5()` loads each file into the same data object as an excitation spot.
+- dplot function keyword argument `i=None` now plots concatenated data from all excitation spots. Does not apply to trace-based plots
+- Fitter attributes relating to fit values now have parallel attributes ending in `_tot` which are for concatentated data across all spots.
 
 
 Version 0.7 (Jul. 2018)
