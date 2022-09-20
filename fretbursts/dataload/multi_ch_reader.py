@@ -11,9 +11,6 @@ and detector) for each photon.
 This data is produced by the 4 and 8-spot smFRET setup, first generation.
 """
 
-from __future__ import absolute_import, division
-from builtins import range, zip
-
 import os
 import numpy as np
 

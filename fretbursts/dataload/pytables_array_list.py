@@ -16,9 +16,6 @@ Each list element is a reference to a pytable array. To read the array in
 memory use the slicing notation (like pytable_array[:]).
 """
 
-from __future__ import print_function
-from builtins import range, zip
-
 import os
 import tables
 
