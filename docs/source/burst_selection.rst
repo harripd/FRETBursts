@@ -3,7 +3,7 @@
 Burst selection
 ===============
 
-.. module:: fretbursts.burstlib
+.. currentmodule:: fretbursts.burstlib
 
 After performing a burst search is common to select bursts according to
 different criteria (burst size, FRET efficiency, etc...).

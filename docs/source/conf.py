@@ -366,4 +366,4 @@ texinfo_documents = [
 # examples, originally taken from scikit-learn's doc/conf.py
 def setup(app):
     #app.add_javascript('copybutton.js')
-    app.add_stylesheet('style.css')
+    app.add_css_file('style.css')
