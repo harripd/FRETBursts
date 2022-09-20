@@ -1,8 +1,8 @@
 FRETBursts Release Notes
 ========================
 
-Version 0.7.1 (unreleased)
---------------------------
+Version 0.7.1
+-------------
 
 - Require Python 3.6+. Python 2.7 is not supported anymore.
 - Fix deprecation warning when plotting timetraces. Now matplotlib 3+ is required.
