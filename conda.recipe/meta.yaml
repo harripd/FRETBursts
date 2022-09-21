@@ -15,7 +15,6 @@ requirements:
   build:
     - python
     - setuptools
-    - future
     - cython
     - numpy x.x
     - matplotlib
@@ -25,7 +24,6 @@ requirements:
 
   run:
     - python
-    - future
     - numpy x.x
     - scipy
     - pyqt 4*

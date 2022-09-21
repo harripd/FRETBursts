@@ -63,7 +63,7 @@ setup(name = project_name,
       download_url = 'http://opensmfs.github.io/FRETBursts/',
       python_requires='>=3.6',
       install_requires = ['numpy', 'scipy', 'matplotlib', 'lmfit', 'seaborn',
-                          'phconvert', 'future'],
+                          'phconvert'],
       include_package_data = True,
       license = 'GPLv2',
       description = ("Burst analysis toolkit for single and multi-spot "
