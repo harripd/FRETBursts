@@ -49,7 +49,7 @@ from matplotlib.pyplot import (plot, hist, xlabel, ylabel, grid, title, legend,
 from matplotlib.patches import Rectangle, Ellipse
 from matplotlib.collections import PatchCollection, PolyCollection
 from matplotlib.offsetbox import AnchoredText
-from matplotlib.gridspec import GridSpec
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 import seaborn as sns
@@ -2351,7 +2351,8 @@ def _alex_hexbin_vmax(patches, vmax_fret=True, Smax=0.8):
 def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
                    vmax_fret=True, vmin=1, vmax=None,
                    joint_kws=None, marginal_kws=None, marginal_color=10,
-                   rightside_text=False, E_name='E', S_name='S'):
+                   rightside_text=False, E_name='E', S_name='S',
+                   ax=None, fig=None):
     """Plot an ALEX join plot: an E-S 2D histograms with marginal E and S.
 
     This function plots a jointplot: an inner 2D E-S distribution plot
@@ -2407,8 +2408,15 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
     """
     #g = sns.JointGrid(x=d[E_name][i], y=d[S_name][i], ratio=3, space=0.2,
     #                  xlim=(-0.2, 1.2), ylim=(-0.2, 1.2))
-    g = plt.figure(figsize=(7,7))
-    gs = GridSpec(figure=g,nrows=4,ncols=4)
+    if ax is None and fig is None:        
+        g = plt.figure(figsize=(7,7))
+    else:
+        g = fig
+    if g is not None:
+        gs = GridSpec(figure=g,nrows=4,ncols=4)
+    elif ax is not None:
+        g = ax.figure
+        gs = GridSpecFromSubplotSpec(subplot_spec=ax, nrows=4, ncols=4)
     ax_joint = g.add_subplot(gs[1:4,0:3])
     ax_horiz = g.add_subplot(gs[0,0:3],sharex=ax_joint)
     ax_verti = g.add_subplot(gs[1:4,3],sharey=ax_joint)
@@ -2451,8 +2459,11 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
         data = {'E':E, 'S':S}
         jplot = sns.kdeplot(data=data, x='E', y='S', ax=ax_joint, **joint_kws_)
     anno_str = ''
-    for mburst in d.mburst:
-        anno_str = anno_str + f'# Bursts: {mburst.size}\n'
+    if i is None:
+        for mburst in d.mburst:
+            anno_str += anno_str + f'# Bursts: {mburst.size}\n'
+    else:
+        anno_str += f'# Bursts: {d.mburst[i].size}' 
     anno_box = AnchoredText(anno_str,loc='upper right',frameon=False)
     ax_joint.add_artist(anno_box)
     ax_joint.set_xlim(-0.19, 1.19)
