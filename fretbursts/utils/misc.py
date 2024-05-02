@@ -64,7 +64,7 @@ class HistData(object):
     @property
     def pdf(self):
         if not hasattr(self, '_pdf'):
-            self._pdf = np.array(self.counts, dtype=np.float)
+            self._pdf = np.array(self.counts, dtype=np.float64)
             self._pdf /= (self.counts.sum() * self.binwidth)
         return self._pdf
 
