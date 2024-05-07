@@ -789,7 +789,8 @@ class Data(DataContainer):
             ph_sel (Ph_sel object): object defining the photon selection.
                 See :mod:`fretbursts.ph_sel` for details.
         """
-        isinstance(ich, numbers.Integral)
+        if not isinstance(ich, numbers.Integral):
+            raise TypeError(f"channel must be integer value, got {type(ich)}")
 
         if self._is_allph(ph_sel):
             # Note that slice(None) is equivalent to [:].
@@ -1273,7 +1274,7 @@ class Data(DataContainer):
                       donor_ref=donor_ref)
         bsize_list = [self.burst_sizes_ich(ich, **kwargs) for ich in
                       range(self.nch)]
-        return np.array(bsize_list)
+        return bsize_list
 
     def iter_bursts_ph(self, ich=0):
         """Iterate over (start, stop) indexes to slice photons for each burst.

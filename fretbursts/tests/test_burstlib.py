@@ -790,6 +790,7 @@ def test_phrates_mtuple(data):
 
 
 if has_numba:
+# if True:
     def test_phrates_kde(data):
         d = data
         tau = 5000  # 5000 * 12.5ns = 6.25 us
@@ -800,12 +801,12 @@ if has_numba:
             ratesl, nph = phrates.nb.kde_laplace_nph(ph, tau)
             assert (rates == ratesl).all()
             assert (nph == nrect).all()
-
+    
             # Test consistency of kde_laplace and _kde_laplace_self_numba
             ratesl2, nph2 = phrates.nb.kde_laplace_self_numba(ph, tau)
             assert (nph2 == nrect).all()
             assert (ratesl2 == rates).all()
-
+    
             # Smoke test laplace, gaussian, rect with time_axis
             ratesl = phrates.kde_laplace(ph, tau, time_axis=ph+1)
             assert ((ratesl >= 0) * (ratesl < 5e6)).all()

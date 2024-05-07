@@ -23,12 +23,12 @@ else:
     has_matplotlib = True
     matplotlib.use('Agg')  # but if matplotlib is installed, use Agg
 
-try:
-    import numba
-except ImportError:
-    has_numba = False
-else:
-    has_numba = True
+# try:
+#     import numba
+# except ImportError:
+#     has_numba = False
+# else:
+#     has_numba = True
 
 
 import fretbursts.background as bg

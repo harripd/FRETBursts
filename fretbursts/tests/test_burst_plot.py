@@ -21,12 +21,12 @@ else:
     has_matplotlib = True
     matplotlib.use('Agg')  # but if matplotlib is installed, use Agg
 
-try:
-    import numba
-except ImportError:
-    has_numba = False
-else:
-    has_numba = True
+# try:
+#     import numba
+# except ImportError:
+#     has_numba = False
+# else:
+#     has_numba = True
 
 
 import fretbursts.background as bg
@@ -59,7 +59,7 @@ def load_dataset_1ch(process=True):
     return d
 
 def load_dataset_1ch_nsalex(process=True):
-    fn = "dsdna_d7_d17_50_50_1.hdf5"
+    fn = "HP3_TE150_SPC630.hdf5"
     fname = DATASETS_DIR + fn
     d = loader.photon_hdf5(fname)
     if process:

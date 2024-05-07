@@ -1761,17 +1761,9 @@ def hist_mdelays(d, i=0, m=10, bins_s=(0, 10, 0.02), period=0,
         #ax.clear()
         for _ind in range(len(ax.lines)): ax.lines.pop()
 
-    if i is None:
-        results = np.concatenate([bext.calc_mdelays_hist(d, ich=j, m=m, period=period, 
-                                                          bins_s=bins_s,ph_sel=ph_sel, 
-                                                          bursts=True, bg_fit=bg_fit, 
-                                                          bg_F=bg_F) 
-                                  for j in range(d.nch)])
-    else:
-        results = bext.calc_mdelays_hist(d, ich=i, m=m, period=period, bins_s=bins_s,
+    results = bext.calc_mdelays_hist(d, ich=i, m=m, period=period, bins_s=bins_s,
                                          ph_sel=ph_sel, bursts=True, bg_fit=bg_fit, bg_F=bg_F)
-    bin_x, histog_y = results[:2]
-    bg_dist = results[2]
+    bin_x, histog_y, bg_dist = results[:3]
     rate_ch_kcps = 1./bg_dist.kwds['scale']  # extract the rate
     if bg_fit:
         a, rate_kcps = results[3:5]
