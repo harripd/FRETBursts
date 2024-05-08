@@ -434,9 +434,9 @@ def burst_photons(dx, skip_ch=None):
     else:
         stream = dx.A_em[ich].view('int8')
     times_arr = np.hstack(
-        burstlib.iter_bursts_ph(dx.ph_times_m[ich], dx.mburst[ich]))
+        list(burstlib.iter_bursts_ph(dx.ph_times_m[ich], dx.mburst[ich])))
     stream_arr = np.hstack(
-        burstlib.iter_bursts_ph(stream, dx.mburst[ich]))
+        list(burstlib.iter_bursts_ph(stream, dx.mburst[ich])))
 
     burst_id, ph_id = [], []
     for i, arr in enumerate(burstlib.iter_bursts_ph(stream, dx.mburst[ich])):
@@ -449,7 +449,7 @@ def burst_photons(dx, skip_ch=None):
     columns = ['timestamp', 'stream']
     if dx.lifetime:
         nanot_arr = np.hstack(
-            burstlib.iter_bursts_ph(dx.nanotimes[ich], dx.mburst[ich]))
+            list(burstlib.iter_bursts_ph(dx.nanotimes[ich], dx.mburst[ich])))
         bph['nanotime'] = nanot_arr
         columns = ['timestamp', 'nanotime', 'stream']
     burstph = pd.DataFrame(bph, index=[burst_id, ph_id], columns=columns)
