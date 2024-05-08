@@ -70,7 +70,7 @@ jobs:
           python -m pip install pytest cython numpy scipy pandas matplotlib 
           python -m pip install seaborn
       - name: MacOS install hdf5 dependencies
-        if: runner.os == 'maxOS'
+        if: runner.os == 'macOS'
         run: |
           brew install hdf5
           export HDF5_DIR=/usr/local/
