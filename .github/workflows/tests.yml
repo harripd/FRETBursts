@@ -36,16 +36,16 @@ jobs:
           #   python-version: "3.8"
           # - os: windows-latest
           #   python-version: "3.9"
-          - os: windows-latest
-            python-version: "3.10"
+          # - os: windows-latest
+          #   python-version: "3.10"
           # - os: windows-latest
           #   python-version: "3.11"
           # - os: macOS-12
           #   python-version: "3.6"
           # - os: macOS-12
           #   python-version: "3.7"
-          - os: macOS-latest
-            python-version: "3.8"
+          # - os: macOS-latest
+          #   python-version: "3.8"
           # - os: macOS-latest
           #   python-version: "3.9"
           # - os: macOS-latest
@@ -73,7 +73,7 @@ jobs:
       - name: Install Dependencies
         run: |
           conda install pytest cython numpy jupyter nbconvert phconvert
-          conda install scipy pandas matplotlib tables
+          conda install scipy pandas matplotlib pytables
           python -m pip install seaborn
           python -m pip install lmfit pybroom
       # - name: MacOS install hdf5 dependencies
