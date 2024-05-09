@@ -73,7 +73,7 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          conda install pytest cython numpy nbconvert ipython jupyter
+          conda install pytest cython numpy nbconvert ipython jupyter setuptools
           conda install scipy pandas matplotlib pytables phconvert
           python -m pip install seaborn
           python -m pip install lmfit pybroom
