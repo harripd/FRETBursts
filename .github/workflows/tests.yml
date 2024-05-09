@@ -72,8 +72,8 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          conda install pytest cython numpy jupyter nbconvert phconvert
-          conda install scipy pandas matplotlib pytables
+          conda install pytest cython numpy ipython jupyter nbconvert
+          conda install scipy pandas matplotlib pytables phconvert
           python -m pip install seaborn
           python -m pip install lmfit pybroom
       # - name: MacOS install hdf5 dependencies
