@@ -74,8 +74,8 @@ jobs:
         run: |
           conda install pytest cython numpy jupyter nbconvert phconvert
           conda install scipy pandas matplotlib tables
-          conda install seaborn
-          python -m install lmfit pybroom
+          python -m pip install seaborn
+          python -m pip install lmfit pybroom
       # - name: MacOS install hdf5 dependencies
       #   if: runner.os == 'macOS'
       #   run: |
