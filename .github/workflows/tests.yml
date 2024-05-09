@@ -86,6 +86,10 @@ jobs:
       #   run: |
       #     python -m pip install tables
       #     python -m pip install jupyter nbconvert lmfit phconvert pybroom
+      - name: Locate project
+        run: |
+          pwd
+          ls
       - name: Install project
         run: |
           python setup.py sdist
