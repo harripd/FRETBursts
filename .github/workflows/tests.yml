@@ -72,6 +72,7 @@ jobs:
       
       - name: Install Dependencies
         run: |
+          conda init
           conda activate test
           conda install pytest cython numpy nbconvert ipython jupyter
           conda install scipy pandas matplotlib pytables phconvert
