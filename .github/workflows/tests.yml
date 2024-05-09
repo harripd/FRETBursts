@@ -54,7 +54,7 @@ jobs:
           #   python-version: "3.11" 
           
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
     #   - name: Setup Python ${{matrix.python-version}}
     #     uses: actions/setup-python@v4
     #     with:
@@ -72,7 +72,8 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          conda install pytest cython numpy ipython jupyter nbconvert
+          conda install pytest cython numpy nbconvert
+          python -m pip install ipython jupyter
           conda install scipy pandas matplotlib pytables phconvert
           python -m pip install seaborn
           python -m pip install lmfit pybroom
