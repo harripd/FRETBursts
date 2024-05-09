@@ -32,8 +32,8 @@ jobs:
           #   python-version: "3.6"
           # - os: windows-latest
           #   python-version: "3.7"
-          # - os: windows-latest
-          #   python-version: "3.8"
+          - os: windows-latest
+            python-version: "3.8"
           # - os: windows-latest
           #   python-version: "3.9"
           # - os: windows-latest
@@ -44,8 +44,8 @@ jobs:
           #   python-version: "3.6"
           # - os: macOS-12
           #   python-version: "3.7"
-          - os: macOS-latest
-            python-version: "3.8"
+          # - os: macOS-latest
+          #   python-version: "3.8"
           # - os: macOS-latest
           #   python-version: "3.9"
           # - os: macOS-latest
