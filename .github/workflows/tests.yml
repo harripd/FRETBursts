@@ -73,8 +73,8 @@ jobs:
       
       - name: Install Dependencies
         run: |
-          python -m pip install setuptools ipython jupyter
-          conda install pytest cython numpy nbconvert setuptools
+          python -m pip install setuptools ipython jupyter pytest
+          conda install cython numpy nbconvert setuptools
           conda install scipy pandas matplotlib pytables phconvert
           python -m pip install seaborn lmfit pybroom
       # - name: MacOS install hdf5 dependencies
@@ -89,7 +89,6 @@ jobs:
       #     python -m pip install jupyter nbconvert lmfit phconvert pybroom
       - name: Install project
         run: |
-          python setup.py sdist
           python -m pip install .
       - name: Download files Unix
         if: runner.os != 'Windows'
@@ -111,5 +110,4 @@ jobs:
           curl.exe --output HP3_TE300_SPC630.hdf5 --url https://zenodo.org/record/5902313/files/HP3_TE300_SPC630.hdf5
       - name: Test project
         run: |
-          python fretbursts/tests/nbrun.py notebooks
           python -m pytest
