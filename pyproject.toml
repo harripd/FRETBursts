@@ -1,15 +1,48 @@
 [build-system]
 requires = [
-    "setuptools>=42",
-    "cython>=0.29",
-    "numpy>=1.19",
-    "matplotlib>=3.0",
-    "scipy>=1.2",
-    "pandas>=0.23",
-    "seaborn>=0.11.1",
-    "tables>=3.5",
-    "phconvert>=0.8",
-    "lmfit>=1.0.1",
-    "versioneer"
+    "setuptools>=45", 
+    "cython>=0.29", 
+    "oldest-supported-numpy",
+    "versioneer",
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "fretbursts"
+dynamic = ["version", ]
+authors = [
+    {name="Antonio Ingargiola", email="tritemio@gmail.com"}, 
+    {name="Paul David Harris", email="harripd@gmail.com"}]
+description = "Burst analysis toolkit for single and multi-spot smFRET data."
+readme = "README.md"
+license = {file = "LICENSE.txt"}
+keywords = ["single-molecule FRET","smFRET", "burst-analysis", "biophysics"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering"
+ ]
+requires-python = ">= 3.6"
+dependencies = [
+    "numpy>=1.19", 
+    "matplotlib>=3.0.1", 
+    "scipy>=1.2", 
+    "pandas >= 0.23",
+    "seaborn>=0.11.1",
+    "tables>=3.5",
+    "lmfit>=1.0.1",
+    "phconvert>=0.8"
+    ]
+ 
+[project.urls]
+Homepage = "http://opensmfs.github.io/FRETBursts/"
+Documentation = "https://fretbursts.readthedocs.io/en/latest/"
+Issues = "https://github.com/OpenSMFS/FRETBursts/"
+Repository = "https://github.com/OpenSMFS/FRETBursts/issues"
+
