@@ -5,11 +5,6 @@
 #               Antonino Ingargiola <tritemio@gmail.com>
 #
 
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
-
-
 ## Citation information
 _CITATION = """
    FRETBursts: An Open Source Toolkit for Analysis of Freely-Diffusing Single-Molecule FRET
@@ -25,7 +20,7 @@ def citation(bar=True):
         cit = ('-' * 62) + '\n' + _INFO_CITATION +  ('-' * 62)
     print(cit)
 
-
+from fretbursts._version import version as __version__
 import warnings
 
 try:

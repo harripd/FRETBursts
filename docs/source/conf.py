@@ -54,7 +54,9 @@ except ImportError:
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath('../..'))
 import fretbursts
-version = fretbursts._version.get_versions()['version'][:13]
+
+from fretbursts._version import version as __version__
+version = ".".join(__version__.split('.')[:2])
 release = version
 
 import sphinx_bootstrap_theme

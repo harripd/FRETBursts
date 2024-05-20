@@ -1,6 +1,7 @@
 burstsearch/build/
 docs/source/_themes/
 *ipynb_checkpoints*
+fretbursts/version.py
 
 *build/
 *egg-info/

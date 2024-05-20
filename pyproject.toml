@@ -1,9 +1,9 @@
 [build-system]
 requires = [
-    "setuptools>=45", 
+    "setuptools>=64", 
+    "setuptools_scm>=8",
     "cython>=0.29", 
     "oldest-supported-numpy",
-    "versioneer",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -46,3 +46,9 @@ Documentation = "https://fretbursts.readthedocs.io/en/latest/"
 Issues = "https://github.com/OpenSMFS/FRETBursts/"
 Repository = "https://github.com/OpenSMFS/FRETBursts/issues"
 
+[project.optional-dependencies]
+gui = ["PyQt5"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+write_to = "fretbursts/_version.py"
