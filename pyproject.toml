@@ -47,8 +47,17 @@ Issues = "https://github.com/OpenSMFS/FRETBursts/"
 Repository = "https://github.com/OpenSMFS/FRETBursts/issues"
 
 [project.optional-dependencies]
-gui = ["PyQt5"]
+plot = ["matplotlib>=3.0.1"]
+gui = ["matplotlib>=3.0.1", "PyQt5"]
+
+[tool.setuptools.packages.find]
+include = ['fretbursts*']
+
+[tool.setuptools.package-data]
+fretbursts = ["phtools/*.pyx", ]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
 write_to = "fretbursts/_version.py"
+
+[tool.pytest.ini_options]
