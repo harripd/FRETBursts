@@ -42,7 +42,7 @@ if has_matplotlib:
 
 
 # data subdir in the notebook folder
-DATASETS_DIR = u'data/'
+DATASETS_DIR = u'notebooks/data/'
 
 
 def _alex_process(d):

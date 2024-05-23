@@ -6,6 +6,11 @@
 #
 
 ## Citation information
+
+
+from fretbursts._version import version as __version__
+import warnings
+
 _CITATION = """
    FRETBursts: An Open Source Toolkit for Analysis of Freely-Diffusing Single-Molecule FRET
    Ingargiola et al. (2016). http://dx.doi.org/10.1371/journal.pone.0160716 """
@@ -19,9 +24,6 @@ def citation(bar=True):
     if bar:
         cit = ('-' * 62) + '\n' + _INFO_CITATION +  ('-' * 62)
     print(cit)
-
-from fretbursts._version import version as __version__
-import warnings
 
 try:
     import pandas

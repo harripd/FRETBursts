@@ -44,7 +44,7 @@ if has_matplotlib:
 
 
 # data subdir in the notebook folder
-DATASETS_DIR = u'data/'
+DATASETS_DIR = u'notebooks/data/'
 
 
 def _alex_process(d):
@@ -1173,4 +1173,4 @@ def test_norm_pdf():
             assert np.allclose(normpdf(x, c, mu), norm.pdf(x, loc=c, scale=mu))
 
 if __name__ == '__main__':
-    pytest.main("-x -v fretbursts/tests/test_burstlib.py")
+    pytest.main("-x -v tests/test_burstlib.py")

@@ -2470,19 +2470,19 @@ def _register_colormaps():
     c = sns.color_palette('nipy_spectral', 64)[2:43]
     cmap = mpl.colors.LinearSegmentedColormap.from_list('alex_lv', c)
     cmap.set_under(alpha=0)
-    mpl.cm.register_cmap(name='alex_lv', cmap=cmap)
+    mpl.colormaps.register(name='alex_lv', cmap=cmap)
 
     c = sns.color_palette('YlGnBu', 64)[16:]
     cmap = mpl.colors.LinearSegmentedColormap.from_list('alex', c)
     cmap.set_under(alpha=0)
-    mpl.cm.register_cmap(name='alex_light', cmap=cmap)
-    mpl.cm.register_cmap(name='YlGnBu_crop', cmap=cmap)
-    mpl.cm.register_cmap(name='alex_dark', cmap=mpl.cm.GnBu_r)
+    mpl.colormaps.register(name='alex_light', cmap=cmap)
+    mpl.colormaps.register(name='YlGnBu_crop', cmap=cmap)
+    mpl.colormaps.register(name='alex_dark', cmap=mpl.cm.GnBu_r)
 
     # Temporary hack to workaround issue
     # https://github.com/mwaskom/seaborn/issues/855
-    mpl.cm.alex_light = mpl.cm.get_cmap('alex_light')
-    mpl.cm.alex_dark = mpl.cm.get_cmap('alex_dark')
+    mpl.cm.alex_light = mpl.colormaps.get_cmap('alex_light')
+    mpl.cm.alex_dark = mpl.colormaps.get_cmap('alex_dark')
 
 
 # Register colormaps on import if not mocking
