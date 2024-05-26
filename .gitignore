@@ -31,5 +31,6 @@ notebooks/out
 notebooks/wip
 .cache
 *.csv
+*.mat
 _*
 docs/source/modules/generated

@@ -146,8 +146,9 @@ def run_notebook(notebook_path, nb_kwargs=None, suffix='-out',
         kernel_name = 'python%d' % sys.version_info[0]
     execute_kwargs.update(kernel_name=kernel_name)
     ep = ExecutePreprocessor(**execute_kwargs)
+    print("executed preprocessor") ################################
     nb = nbformat.read(str(notebook_path), as_version=4)
-
+    print("read notebook") #######################################
     if hide_input:
         nb["metadata"].update({"hide_input": True})
 
@@ -155,9 +156,11 @@ def run_notebook(notebook_path, nb_kwargs=None, suffix='-out',
         nb['cells'].insert(insert_pos, nbformat.v4.new_code_cell(code_cell))
 
     start_time = time.time()
+    print("starting process")
     try:
         # Execute the notebook
         ep.preprocess(nb, {'metadata': {'path': working_dir}})
+        print("finished ep.preprocess")
     except:
         # Execution failed, print a message then raise.
         msg = ('Error executing the notebook "%s".\n'
@@ -169,6 +172,7 @@ def run_notebook(notebook_path, nb_kwargs=None, suffix='-out',
         raise
     finally:
         # Add timestamping cell
+        print("fiished main notebook") #####################3
         duration = time.time() - start_time
         timestamp_cell = timestamp_cell % (time.ctime(start_time), duration,
                                            notebook_path, out_path_ipynb)
@@ -176,10 +180,12 @@ def run_notebook(notebook_path, nb_kwargs=None, suffix='-out',
             nb['cells'].append(nbformat.v4.new_markdown_cell(timestamp_cell))
         # Save the executed notebook to disk
         if save_ipynb:
+            print("saving ipynb")
             nbformat.write(nb, str(out_path_ipynb))
             if display_links:
                 display(FileLink(str(out_path_ipynb)))
         if save_html:
+            print("saving html")
             html_exporter = HTMLExporter()
             body, resources = html_exporter.from_notebook_node(nb)
             with open(str(out_path_html), 'w') as f:
