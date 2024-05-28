@@ -50,10 +50,10 @@ jobs:
       - name: Install Dependencies
         shell: bash -el {0}
         run: |
-          conda install cython numpy nbconvert setuptools pytest ipython jupyter
+          conda install cython numpy nbconvert pytest ipython jupyter
           conda install scipy pandas matplotlib pytables
           conda install phconvert lmfit pybroom
-          python -m pip install seaborn build
+          python -m pip install seaborn build setuptools
       - name: Install project
         shell: bash -el {0}
         run: |
