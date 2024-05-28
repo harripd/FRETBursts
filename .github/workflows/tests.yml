@@ -91,5 +91,5 @@ jobs:
       - name: Test project
         shell: bash -el {0}
         run: |
-          python fretbursts/tests/nbrun.py notebooks
+          python notebooks/nbrun.py notebooks
           python -m pytest
