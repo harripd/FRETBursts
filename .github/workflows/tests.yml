@@ -2,11 +2,14 @@ name: Tests
 
 on: 
   push:
-    branch:
+    branches:
+      - plots
+      - master
       - gitactions
   pull_request:
-    branch:
-      - gitactions
+    branches:
+      - plots
+      - master
 jobs:
   build:
 
