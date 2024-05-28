@@ -39,7 +39,12 @@ jobs:
       # - name: Windows 3.6 Oddities
       #   if: matrix.python-version == 3.6 && runner.os == 'Windows'
       #   run: python -m pip install pywinpty==1.1.6
-      
+      - name: MacOS install hdf5 dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install hdf5
+          export HDF5_DIR=/usr/local/
+          export BLOSC_DIR=/usr/local/
       - name: Install Dependencies
         shell: bash -el {0}
         run: |
