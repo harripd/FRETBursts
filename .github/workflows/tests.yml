@@ -22,8 +22,7 @@ jobs:
           - os: macOS-latest
             python-version: "3.7"
           - os: windows-latest
-            python-version: "3.7" 
-          
+            python-version: "3.7"           
     steps:
       - uses: actions/checkout@v4
     #   - name: Setup Python ${{matrix.python-version}}
@@ -63,23 +62,34 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash -el {0} 
         run: |
+          cd notebooks
+          mkdir data
+          cd data
           wget -N http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
           wget -N http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
           wget -N https://zenodo.org/record/5902313/files/HP3_TE150_SPC630.hdf5
           wget -N https://zenodo.org/record/5902313/files/HP3_TE200_SPC630.hdf5
           wget -N https://zenodo.org/record/5902313/files/HP3_TE250_SPC630.hdf5
           wget -N https://zenodo.org/record/5902313/files/HP3_TE300_SPC630.hdf5
+          cd ../..
       - name: Downlaod files Windows
         if: runner.os == 'Windows'
         shell: bash -el {0}
         run: |
+          cd notebooks
+          mkdir data
+          cd data
           curl.exe --output 2182604/12d_New_30p_320mW_steer_3.hdf5 --url http://files.figshare.com/2182604/12d_New_30p_320mW_steer_3.hdf5
           curl.exe --output 0023uLRpitc_NTP_20dT_0.5GndCl.hdf5 --url http://files.figshare.com/2182601/0023uLRpitc_NTP_20dT_0.5GndCl.hdf5
           curl.exe --output HP3_TE150_SPC630.hdf5 --url https://zenodo.org/record/5902313/files/HP3_TE150_SPC630.hdf5
           curl.exe --output HP3_TE200_SPC630.hdf5 --url https://zenodo.org/record/5902313/files/HP3_TE200_SPC630.hdf5
           curl.exe --output HP3_TE250_SPC630.hdf5 --url https://zenodo.org/record/5902313/files/HP3_TE250_SPC630.hdf5
           curl.exe --output HP3_TE300_SPC630.hdf5 --url https://zenodo.org/record/5902313/files/HP3_TE300_SPC630.hdf5
+          cd ..
+          cd ..
+
       - name: Test project
         shell: bash -el {0}
         run: |
+          python fretbursts/tests/nbrun.py notebooks
           python -m pytest
