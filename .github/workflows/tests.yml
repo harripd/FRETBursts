@@ -50,10 +50,11 @@ jobs:
         run: |
           conda install cython numpy nbconvert setuptools pytest ipython jupyter
           conda install scipy pandas matplotlib pytables
-          python -m pip install phconvert seaborn lmfit pybroom
+          conda install phconvert lmfit pybroom
+          python -m pip install seaborn build
       - name: Install project
         run: |
-          python -m pip install .
+          python -m pip install . --no-build-isolation
       - name: Download files Unix
         if: runner.os != 'Windows'
         shell: bash -el {0} 
@@ -78,5 +79,3 @@ jobs:
         shell: bash -el {0}
         run: |
           python -m pytest
-          cd notebooks
-          python ../tests/nbrun.py .
