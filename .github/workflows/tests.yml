@@ -91,5 +91,6 @@ jobs:
       - name: Test project
         shell: bash -el {0}
         run: |
-          python notebooks/nbrun.py notebooks
           python -m pytest
+          conda install pybroom
+          python notebooks/nbrun.py notebooks

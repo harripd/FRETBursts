@@ -113,7 +113,7 @@ def _normalize_kwargs(kwargs, kind='patch'):
                           mfc='markerfacecolor', ms='markersize',)
     elif kind == 'scatter':
         long_names = dict(ls='linestyle', lw='linewidth',
-                          ec='edgecolor',)
+                          ec='edgecolor', color='c')
     elif kind == 'patch':
         long_names = dict(c='color', ls='linestyle', lw='linewidth',
                           ec='edgecolor', fc='facecolor',)
