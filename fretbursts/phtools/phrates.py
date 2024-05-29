@@ -31,7 +31,7 @@ Note:
 import numpy as np
 
 try:
-    import fretbursts.phrates_c as cy
+    import phrates_c as cy
 except ImportError:
     has_cython = False
 else:

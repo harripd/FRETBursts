@@ -191,7 +191,7 @@ def mch_count_ph_in_bursts_py(Mburst, Mask):
 #
 
 try:
-    from fretbursts.burstsearch_c import bsearch_c, mch_count_ph_in_bursts_c
+    from burstsearch_c import bsearch_c, mch_count_ph_in_bursts_c
     bsearch = bsearch_c
     mch_count_ph_in_bursts = mch_count_ph_in_bursts_c
     print(" - Optimized (cython) burst search loaded.")

@@ -41,7 +41,7 @@ from fretbursts.ph_sel import Ph_sel
 from fretbursts.phtools import phrates
 if has_matplotlib:
     import fretbursts.burst_plot as bplt
-from fretbursts.burstsearch_c import mch_count_ph_in_bursts_c
+
 
 # data subdir in the notebook folder
 DATASETS_DIR = u'notebooks/data/'
@@ -557,7 +557,7 @@ def test_burst_search(data):
 
 def test_mch_count_ph_num_py_c(data):
     na_py = bl.bslib.mch_count_ph_in_bursts_py(data.mburst, data.A_em)
-    na_c = mch_count_ph_in_bursts_c(data.mburst, data.A_em)
+    na_c = bl.bslib.mch_count_ph_in_bursts_c(data.mburst, data.A_em)
     assert list_array_equal(na_py, na_c)
     assert na_py[0].dtype == np.float64
 
