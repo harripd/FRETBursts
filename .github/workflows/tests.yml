@@ -36,7 +36,7 @@ jobs:
           channels: conda-forge
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
-        shell: bash -el {0}
+        shell: bash -l {0}
         run: python -m pip install --upgrade pip
       # - name: Windows 3.6 Oddities
       #   if: matrix.python-version == 3.6 && runner.os == 'Windows'
@@ -48,16 +48,16 @@ jobs:
           export HDF5_DIR=/usr/local/
           export BLOSC_DIR=/usr/local/
       - name: Install Dependencies
-        shell: bash -el {0}
+        shell: bash -l {0}
         run: |
           conda install cython numpy nbconvert pytest jupyter scipy pandas matplotlib pytables phconvert lmfit pybroom seaborn setuptools build
       - name: Install project
-        shell: bash -el {0}
+        shell: bash -l {0}
         run: |
           python -m pip install . 
       - name: Download files Unix
         if: runner.os != 'Windows'
-        shell: bash -el {0} 
+        shell: bash -l {0} 
         run: |
           cd notebooks
           mkdir data
@@ -71,7 +71,7 @@ jobs:
           cd ../..
       - name: Downlaod files Windows
         if: runner.os == 'Windows'
-        shell: bash -el {0}
+        shell: bash -l {0}
         run: |
           cd notebooks
           mkdir data
@@ -86,7 +86,7 @@ jobs:
           cd ..
 
       - name: Test project
-        shell: bash -el {0}
+        shell: bash -l {0}
         run: |
           python notebooks/nbrun.py notebooks
           python -m pytest
