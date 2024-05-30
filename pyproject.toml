@@ -47,7 +47,7 @@ Issues = "https://github.com/OpenSMFS/FRETBursts/"
 Repository = "https://github.com/OpenSMFS/FRETBursts/issues"
 
 [project.optional-dependencies]
-plot = ["matplotlib>=3.0.1"]
+scientific = ["jupyter", "matplotlib>=3.0.1"]
 gui = ["matplotlib>=3.0.1", "PyQt5"]
 
 [tool.setuptools.packages.find]
