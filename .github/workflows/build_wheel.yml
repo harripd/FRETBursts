@@ -20,10 +20,11 @@ jobs:
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.18.1
-        # env:
-        #   CIBW_TEST_REQUIRES: pytest, numpy == 1.20.1, matplotlib, scipy, pandas, tables, numba, seaborn, lmfit, phconvert
-        #   CIBW_BEFORE_TEST: python -m pip install pytest
-        #   CIBW_TEST_COMMAND: python -m pytest {package}/tests
+        env:
+          CIBW_SKIP: "pp*"
+          # CIBW_TEST_REQUIRES: pytest, numpy == 1.20.1, matplotlib, scipy, pandas, tables, numba, seaborn, lmfit, phconvert
+          # CIBW_BEFORE_TEST: python -m pip install pytest
+          # CIBW_TEST_COMMAND: python -m pytest {package}/tests
       
       - uses: actions/upload-artifact@v4
         with:
