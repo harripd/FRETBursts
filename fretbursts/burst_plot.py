@@ -34,18 +34,17 @@ For more examples refer to
 import warnings
 from itertools import cycle
 from collections.abc import Iterable
+from functools import wraps
 
 # Numeric imports
 import numpy as np
 from numpy import arange, r_
 from scipy.stats import norm as norm
-from scipy.stats import erlang
+from scipy.stats import erlang, gaussian_kde
 from scipy.interpolate import UnivariateSpline
 
 # Graphics imports
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import (plot, hist, xlabel, ylabel, grid, title, legend,
-                               gca, gcf)
 from matplotlib.patches import Rectangle, Ellipse
 from matplotlib.collections import PatchCollection, PolyCollection
 from matplotlib.offsetbox import AnchoredText
@@ -90,6 +89,19 @@ gui_status = {'first_plot_in_figure': True}
 ##
 #  Utility functions
 #
+
+def _ax_intercept(func):
+    """
+    Wrapper that grabs the ax keyword argument and if None or not specified,
+    it calls plt.gca() and adds/replaces ax argument
+    """
+    @wraps(func)
+    def inner(*args, **kwargs):
+        if 'ax' not in kwargs or kwargs['ax'] is None:
+            kwargs['ax'] = plt.gca()
+        return func(*args, **kwargs)
+    return inner
+
 def _normalize_kwargs(kwargs, kind='patch'):
     """Convert matplotlib keywords from short to long form."""
     if kwargs is None:
@@ -99,6 +111,9 @@ def _normalize_kwargs(kwargs, kind='patch'):
         long_names = dict(c='color', ls='linestyle', lw='linewidth',
                           mec='markeredgecolor', mew='markeredgewidth',
                           mfc='markerfacecolor', ms='markersize',)
+    elif kind == 'scatter':
+        long_names = dict(ls='linestyle', lw='linewidth',
+                          ec='edgecolor', color='c')
     elif kind == 'patch':
         long_names = dict(c='color', ls='linestyle', lw='linewidth',
                           ec='edgecolor', fc='facecolor',)
@@ -115,40 +130,49 @@ def bsavefig(d, s):
 #  Multi-channel plot functions
 #
 
-def mch_plot_bg(d, **kwargs):
+@_ax_intercept
+def mch_plot_bg(d, ax=None, **kwargs):
     """Plot background vs channel for DA, D and A photons."""
     bg = d.bg_from(Ph_sel('all'))
     bg_dd = d.bg_from(Ph_sel(Dex='Dem'))
     bg_ad = d.bg_from(Ph_sel(Dex='Aem'))
-    plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg], lw=2, color=blue,
+    ax.plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg], lw=2, color=blue,
          label=' T', **kwargs)
-    plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg_dd], color=green, lw=2,
+    ax.plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg_dd], color=green, lw=2,
          label=' D', **kwargs)
-    plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg_ad], color=red, lw=2,
+    ax.plot(r_[1:d.nch+1], [b.mean()*1e-3 for b in bg_ad], color=red, lw=2,
          label=' A', **kwargs)
-    xlabel("CH"); ylabel("kcps"); grid(True); legend(loc='best')
-    title(d.name)
+    ax.set_xlabel("CH")
+    ax.set_ylabel("kcps")
+    ax.grid(True)
+    ax.legend(loc='best')
+    ax.set_title(d.name)
 
-def mch_plot_bg_ratio(d):
+
+@_ax_intercept
+def mch_plot_bg_ratio(d, ax=None):
     """Plot ratio of A over D background vs channel."""
     bg_dd = d.bg_from(Ph_sel(Dex='Dem'))
     bg_ad = d.bg_from(Ph_sel(Dex='Aem'))
-    plot(r_[1:d.nch+1],
-         [ba.mean()/bd.mean() for bd, ba in zip(bg_dd, bg_ad)],
-         color=green, lw=2, label='A/D')
-    xlabel("CH"); ylabel("BG Ratio A/D"); grid(True)
-    title("BG Ratio A/D "+d.name)
+    ax.plot(r_[1:d.nch+1],
+            [ba.mean()/bd.mean() for bd, ba in zip(bg_dd, bg_ad)],
+            color=green, lw=2, label='A/D')
+    ax.set_xlabel("CH"); ax.set_ylabel("BG Ratio A/D"); ax.grid(True)
+    ax.set_title("BG Ratio A/D "+d.name)
 
-def mch_plot_bsize(d):
+
+@_ax_intercept
+def mch_plot_bsize(d, ax=None):
     """Plot mean burst size vs channel."""
     CH = np.arange(1, d.nch+1)
-    plot(CH, [b.mean() for b in d.nt], color=blue, lw=2, label=' T')
-    plot(CH, [b.mean() for b in d.nd], color=green, lw=2, label=' D')
-    plot(CH, [b.mean() for b in d.na], color=red, lw=2, label=' A')
-    xlabel("CH"); ylabel("Mean burst size")
-    grid(True)
-    legend(loc='best')
-    title(d.name)
+    ax.plot(CH, [b.mean() for b in d.nt], color=blue, lw=2, label=' T')
+    ax.plot(CH, [b.mean() for b in d.nd], color=green, lw=2, label=' D')
+    ax.plot(CH, [b.mean() for b in d.na], color=red, lw=2, label=' A')
+    ax.set_xlabel("CH")
+    ax.set_ylabel("Mean burst size")
+    ax.grid(True)
+    ax.legend(loc='best')
+    ax.set_title(d.name)
 
 
 ##
@@ -169,6 +193,7 @@ def plot_alternation_hist(d, bins=None, ax=None, **kwargs):
         plot_alternation = plot_alternation_hist_usalex
     plot_alternation(d, bins=bins, ax=ax, **kwargs)
 
+@_ax_intercept
 def plot_alternation_hist_usalex(d, bins=None, ax=None, ich=0,
                                  hist_style={}, span_style={}):
     """Plot the us-ALEX alternation histogram for the variable `d`.
@@ -176,9 +201,6 @@ def plot_alternation_hist_usalex(d, bins=None, ax=None, ich=0,
     This function must be called on us-ALEX data **before** calling
     :func:`fretbursts.loader.alex_apply_period`.
     """
-    if ax is None:
-        _, ax = plt.subplots()
-
     if bins is None:
         bins = 100
 
@@ -216,6 +238,8 @@ def plot_alternation_hist_usalex(d, bins=None, ax=None, ich=0,
         ax.axvspan(A_ON[0], period, color=red, **span_style_)
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), frameon=False)
 
+
+@_ax_intercept
 def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
                                  hist_style={}, span_style={}):
     """Plot the ns-ALEX alternation histogram for the variable `d`.
@@ -223,9 +247,6 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
     This function must be called on ns-ALEX data **before** calling
     :func:`fretbursts.loader.alex_apply_period`.
     """
-    if ax is None:
-        _, ax = plt.subplots()
-
     if bins is None:
         bins = np.arange(d.nanotimes_params[ich]['tcspc_num_bins'])
 
@@ -270,6 +291,7 @@ def plot_alternation_hist_nsalex(d, bins=None, ax=None, ich=0,
 #
 
 def _burst_info(d, ich, burst_index):
+    """Generates burst information message for the burst in data.mburst[ich][burst_index]"""
     burst = d.mburst[ich][burst_index]
     params = dict(
         b_index=burst_index,
@@ -291,7 +313,7 @@ def _burst_info(d, ich, burst_index):
     return msg.format(**params)
 
 
-def _plot_bursts(d, i, tmin_clk, tmax_clk, pmax=1e3, pmin=0, color="#999999",
+def _plot_bursts(d, i, tmin_clk, tmax_clk, ax, pmax=1e3, pmin=0, color="#999999",
                  ytext=20):
     """Highlights bursts in a timetrace plot."""
     b = d.mburst[i]
@@ -304,7 +326,7 @@ def _plot_bursts(d, i, tmin_clk, tmax_clk, pmax=1e3, pmin=0, color="#999999",
     end = bs.stop * d.clk_p
     R = []
     width = end - start
-    ax = gca()
+    #TODO: decide how to use axvspan or other better function
     for b, bidx, s, w, sign, va in zip(bs, burst_indices, start, width,
                                        cycle([-1, 1]),
                                        cycle(['top', 'bottom'])):
@@ -317,7 +339,7 @@ def _plot_bursts(d, i, tmin_clk, tmax_clk, pmax=1e3, pmin=0, color="#999999",
     ax.add_artist(PatchCollection(R, lw=0, color=color))
 
 
-def _plot_rate_th(d, i, F, ph_sel, invert=False, scale=1,
+def _plot_rate_th(d, i, F, ph_sel, ax, invert=False, scale=1,
                   plot_style_={}, rate_th_style={}):
     """Plots background_rate*F as a function of time.
 
@@ -342,7 +364,7 @@ def _plot_rate_th(d, i, F, ph_sel, invert=False, scale=1,
     y_rate *= scale
     if invert:
         y_rate *= -1
-    plot(x_rate, y_rate, **rate_th_style_)
+    ax.plot(x_rate, y_rate, **rate_th_style_)
 
 
 def _gui_timetrace_burst_sel(d, fig, ax):
@@ -361,12 +383,13 @@ def _gui_timetrace_scroll(fig):
         gui_status['scroll_gui'] = ScrollingToolQT(fig)
 
 
+@_ax_intercept
 def timetrace_single(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
                      ph_sel=Ph_sel('all'), invert=False, bursts=False,
                      burst_picker=True, scroll=False, cache_bins=True,
                      plot_style=None, show_rate_th=True, F=None,
                      rate_th_style={}, set_ax_limits=True,
-                     burst_color='#BBBBBB'):
+                     burst_color='#BBBBBB', ax=None):
     """Plot the timetrace (histogram) of timestamps for a photon selection.
 
     See :func:`timetrace` to plot multiple photon selections (i.e.
@@ -423,7 +446,7 @@ def timetrace_single(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
 
     # Plot bursts
     if bursts:
-        _plot_bursts(d, i, tmin_clk, tmax_clk, pmax=500, pmin=-500,
+        _plot_bursts(d, i, tmin_clk, tmax_clk, ax, pmax=500, pmin=-500,
                      color=burst_color)
 
     # Plot timetrace
@@ -434,37 +457,38 @@ def timetrace_single(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
     else:
         plot_style_['label'] = str(ph_sel)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plot(x, timetrace, **plot_style_)
+    ax.plot(x, timetrace, **plot_style_)
 
     # Plot burst-search rate-threshold
     if show_rate_th and 'bg' in d:
-        _plot_rate_th(d, i, F=F, ph_sel=ph_sel, invert=invert,
+        _plot_rate_th(d, i, F=F, ph_sel=ph_sel, ax=ax, invert=invert,
                       scale=binwidth, plot_style_=plot_style_,
                       rate_th_style=rate_th_style)
 
-    plt.xlabel('Time (s)')
-    plt.ylabel('# ph')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('# ph')
     if burst_picker and 'mburst' in d:
-        _gui_timetrace_burst_sel(d, gcf(), gca())
+        _gui_timetrace_burst_sel(d, ax.figure, ax)
     if scroll:
-        _gui_timetrace_scroll(gcf())
+        _gui_timetrace_scroll(ax.figure)
 
     if set_ax_limits:
-        plt.xlim(tmin, tmin + 1)
+        ax.set_xlim(tmin, tmin + 1)
         if not invert:
-            plt.ylim(top=100)
+            ax.set_ylim(top=100)
         else:
-            plt.ylim(bottom=-100)
+            ax.set_ylim(bottom=-100)
         _plot_status['timetrace_single'] = {'autoscale': False}
 
 # do not concatenate, timetrace should always be shown per channel
+@_ax_intercept
 def timetrace(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
               bursts=False, burst_picker=True, scroll=False,
               show_rate_th=True, F=None, rate_th_style={'label': None},
               show_aa=True, legend=False, set_ax_limits=True,
               burst_color='#BBBBBB', plot_style=None,
               #dd_plot_style={}, ad_plot_style={}, aa_plot_style={}
-              ):
+              ax=None):
     """Plot the timetraces (histogram) of photon timestamps.
 
     Arguments:
@@ -498,11 +522,12 @@ def timetrace(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
         burst_color (string): string containing the the HEX RGB color to use
             to highlight the burst regions.
         plot_style (dict): matplotlib's style for the timetrace lines.
+        ax (mpl.axes): axis where plot will be generated
     """
     # Plot bursts
     if bursts:
         tmin_clk, tmax_clk = tmin / d.clk_p, tmax / d.clk_p
-        _plot_bursts(d, i, tmin_clk, tmax_clk, pmax=500, pmin=-500,
+        _plot_bursts(d, i, tmin_clk, tmax_clk, ax, pmax=500, pmin=-500,
                      color=burst_color)
 
     # Plot multiple timetraces
@@ -523,18 +548,19 @@ def timetrace(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
                 tmax=tmax, ph_sel=ph_sel, invert=invert, bursts=False,
                 burst_picker=burst_picker_list[ix],
                 scroll=scroll_list[ix], cache_bins=True,
-                show_rate_th=show_rate_th, F=F,
+                show_rate_th=show_rate_th, F=F, ax=ax, 
                 rate_th_style=rate_th_style, set_ax_limits=set_ax_limits,
                 plot_style=plot_style)
     if legend:
-        plt.legend(loc='best', fancybox=True)
+        ax.legend(loc='best', fancybox=True)
 
 
+@_ax_intercept
 def ratetrace_single(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
                      ph_sel=Ph_sel('all'), invert=False, bursts=False,
                      burst_picker=True, scroll=False, plot_style={},
                      show_rate_th=True, F=None, rate_th_style={},
-                     set_ax_limits=True, burst_color='#BBBBBB'):
+                     set_ax_limits=True, burst_color='#BBBBBB', ax=None):
     """Plot the ratetrace of timestamps for a photon selection.
 
     See :func:`ratetrace` to plot multiple photon selections (i.e.
@@ -575,35 +601,36 @@ def ratetrace_single(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
         plot_style_['color'] = _ph_sel_color_dict[ph_sel]
         plot_style_['label'] = _ph_sel_label_dict[ph_sel]
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plot(times, rates, **plot_style_)
+    ax.plot(times, rates, **plot_style_)
 
     # Plot burst-search rate-threshold
     if show_rate_th and 'bg' in d:
-        _plot_rate_th(d, i, F=F, scale=1e-3, ph_sel=ph_sel, invert=invert,
+        _plot_rate_th(d, i, F=F, ph_sel=ph_sel, ax=ax, scale=1e-3, invert=invert,
                       plot_style_=plot_style_, rate_th_style=rate_th_style)
 
-    plt.xlabel('Time (s)')
-    plt.ylabel('Rate (kcps)')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Rate (kcps)')
     if burst_picker:
-        _gui_timetrace_burst_sel(d, gcf(), gca())
+        _gui_timetrace_burst_sel(d, ax.figure, ax)
     if scroll:
-        _gui_timetrace_scroll(gcf())
+        _gui_timetrace_scroll(ax.figure)
 
     if set_ax_limits:
-        plt.xlim(tmin, tmin + 1)
+        ax.set_xlim(tmin, tmin + 1)
         if not invert:
-            plt.ylim(top=100)
+            ax.set_ylim(top=100)
         else:
-            plt.ylim(bottom=-100)
+            ax.set_ylim(bottom=-100)
         _plot_status['ratetrace_single'] = {'autoscale': False}
 
 # same, must be plotted per channel always
+@_ax_intercept
 def ratetrace(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
               bursts=False, burst_picker=True, scroll=False,
               show_rate_th=True, F=None, rate_th_style={'label': None},
               show_aa=True, legend=False, set_ax_limits=True,
               #dd_plot_style={}, ad_plot_style={}, aa_plot_style={}
-              burst_color='#BBBBBB'):
+              burst_color='#BBBBBB', ax=None):
     """Plot the rate timetraces of photon timestamps.
 
     Arguments:
@@ -634,11 +661,12 @@ def ratetrace(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
             timetrace.
         burst_color (string): string containing the the HEX RGB color to use
             to highlight the burst regions.
+        ax (mpl.axes): axis where plot will be generated
     """
     # Plot bursts
     if bursts:
         tmin_clk, tmax_clk = tmin / d.clk_p, tmax / d.clk_p
-        _plot_bursts(d, i, tmin_clk, tmax_clk, pmax=500, pmin=-500,
+        _plot_bursts(d, i, tmin_clk, tmax_clk, ax, pmax=500, pmin=-500,
                      color=burst_color)
 
     # Plot multiple timetraces
@@ -659,10 +687,10 @@ def ratetrace(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
                 tmax=tmax, ph_sel=ph_sel, invert=invert, bursts=False,
                 burst_picker=burst_picker_list[ix],
                 scroll=scroll_list[ix],
-                show_rate_th=show_rate_th, F=F,
+                show_rate_th=show_rate_th, F=F, ax=ax,
                 rate_th_style=rate_th_style, set_ax_limits=set_ax_limits)
     if legend:
-        plt.legend(loc='best', fancybox=True)
+        ax.legend(loc='best', fancybox=True)
 
 
 def sort_burst_sizes(sizes, levels=np.arange(1, 102, 20)):
@@ -676,7 +704,8 @@ def sort_burst_sizes(sizes, levels=np.arange(1, 102, 20)):
     return masks
 
 # plot per channel always
-def timetrace_fret(d, i=0, gamma=1., **kwargs):
+@_ax_intercept
+def timetrace_fret(d, i=0, gamma=1., ax=None, **kwargs):
     """Timetrace of burst FRET vs time. Uses `plot`."""
     b = d.mburst[i]
     bsizes = d.burst_sizes_ich(ich=i, gamma=gamma)
@@ -688,25 +717,29 @@ def timetrace_fret(d, i=0, gamma=1., **kwargs):
     t, E = b.start*d.clk_p, d.E[i]
     levels = sort_burst_sizes(bsizes)
     for ilev, level in enumerate(levels):
-        plt.plot(t[level], E[level], ms=np.sqrt((ilev+1)*15),
+        ax.plot(t[level], E[level], ms=np.sqrt((ilev+1)*15),
                  **style_kwargs)
-    plt.plot(b.start*d.clk_p, d.E[i], '-k', alpha=0.1, lw=1)
-    xlabel('Time (s)'); ylabel('E')
-    _gui_timetrace_burst_sel(d, gcf(), gca())
+    ax.plot(b.start*d.clk_p, d.E[i], '-k', alpha=0.1, lw=1)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('E')
+    _gui_timetrace_burst_sel(d, ax.figure, ax)
 
 # plot per channel always
-def timetrace_fret_scatter(d, i=0, gamma=1., **kwargs):
+@_ax_intercept
+def timetrace_fret_scatter(d, i=0, gamma=1., ax=None, **kwargs):
     """Timetrace of burst FRET vs time. Uses `scatter` (slow)."""
     b = d.mburst[i]
     bsizes = d.burst_sizes_ich(ich=i, gamma=gamma)
 
     style_kwargs = dict(s=bsizes, marker='o', alpha=0.5)
     style_kwargs.update(**kwargs)
-    plt.scatter(b.start*d.clk_p, d.E[i], **style_kwargs)
-    xlabel('Time (s)'); ylabel('E')
+    ax.scatter(b.start*d.clk_p, d.E[i], **style_kwargs)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('E')
 
 # plot per channel always
-def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False):
+@_ax_intercept
+def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False, ax=None):
     """Timetrace of background rates."""
     bg = d.bg_from(Ph_sel('all'))
     bg_dd = d.bg_from(Ph_sel(Dex='Dem'))
@@ -715,29 +748,30 @@ def timetrace_bg(d, i=0, nolegend=False, ncol=2, plot_style={}, show_da=False):
     plot_style_ = dict(linewidth=2, marker='o', markersize=6)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
     label = "T: %d cps" % d.bg_mean[Ph_sel('all')][i]
-    plot(t, 1e-3 * bg[i], color='k', label=label, **plot_style_)
+    ax.plot(t, 1e-3 * bg[i], color='k', label=label, **plot_style_)
     label = "DD: %d cps" % d.bg_mean[Ph_sel(Dex='Dem')][i]
-    plot(t, 1e-3 * bg_dd[i], color=green, label=label, **plot_style_)
+    ax.plot(t, 1e-3 * bg_dd[i], color=green, label=label, **plot_style_)
     label = "AD: %d cps" % d.bg_mean[Ph_sel(Dex='Aem')][i]
-    plot(t, 1e-3 * bg_ad[i], color=red, label=label, **plot_style_)
+    ax.plot(t, 1e-3 * bg_ad[i], color=red, label=label, **plot_style_)
     if d.alternated:
         bg_aa = d.bg_from(Ph_sel(Aex='Aem'))
         label = "AA: %d cps" % d.bg_mean[Ph_sel(Aex='Aem')][i]
-        plot(t, 1e-3 * bg_aa[i], label=label, color=purple, **plot_style_)
+        ax.plot(t, 1e-3 * bg_aa[i], label=label, color=purple, **plot_style_)
         if show_da:
             bg_da = d.bg_from(Ph_sel(Aex='Dem'))
             label = "DA: %d cps" % d.bg_mean[Ph_sel(Aex='Dem')][i]
-            plot(t, 1e-3 * bg_da[i], label=label,
+            ax.plot(t, 1e-3 * bg_da[i], label=label,
                  color=_ph_sel_color_dict[Ph_sel(Aex='Dem')], **plot_style_)
     if not nolegend:
-        legend(loc='best', frameon=False, ncol=ncol)
-    plt.xlabel("Time (s)")
-    plt.ylabel("BG rate (kcps)")
-    plt.grid(True)
-    plt.ylim(bottom=0)
+        ax.legend(loc='best', frameon=False, ncol=ncol)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("BG rate (kcps)")
+    ax.grid(True)
+    ax.set_ylim(bottom=0)
 
 # plot per channel always
-def timetrace_b_rate(d, i=0):
+@_ax_intercept
+def timetrace_b_rate(d, i=0, ax=None):
     """Timetrace of bursts-per-second in each period."""
     t = arange(d.bg[i].size)*d.bg_time_s
     b_rate = r_[[(d.bp[i] == p).sum() for p in range(d.bp[i].max()+1)]]
@@ -746,13 +780,16 @@ def timetrace_b_rate(d, i=0):
         t = t[:-1] # assuming last period without bursts
     else:
         assert t.size == b_rate.size
-    plot(t, b_rate, lw=2, label="CH%d" % (i+1))
-    legend(loc='best', fancybox=True, frameon=False, ncol=3)
-    xlabel("Time (s)"); ylabel("Burst per second"); grid(True)
-    plt.ylim(bottom=0)
+    ax.plot(t, b_rate, lw=2, label="CH%d" % (i+1))
+    ax.legend(loc='best', fancybox=True, frameon=False, ncol=3)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Burst per second")
+    ax.grid(True)
+    ax.set_ylim(bottom=0)
 
 # plot per channel always
-def time_ph(d, i=0, num_ph=1e4, ph_istart=0):
+@_ax_intercept
+def time_ph(d, i=0, num_ph=1e4, ph_istart=0, ax=None):
     """Plot 'num_ph' ph starting at 'ph_istart' marking burst start/end.
     TODO: Update to use the new matplotlib eventplot.
     """
@@ -766,11 +803,11 @@ def time_ph(d, i=0, num_ph=1e4, ph_istart=0):
     start, end = b[BSLICE].start, b[BSLICE].stop
 
     u = d.clk_p # time scale
-    plt.vlines(ph_d*u, 0, 1, color='k', alpha=0.02)
-    plt.vlines(ph_a*u, 0, 1, color='k', alpha=0.02)
-    plt.vlines(start*u, -0.5, 1.5, lw=3, color=green, alpha=0.5)
-    plt.vlines(end*u, -0.5, 1.5, lw=3, color=red, alpha=0.5)
-    xlabel("Time (s)")
+    ax.vlines(ph_d*u, 0, 1, color='k', alpha=0.02)
+    ax.vlines(ph_a*u, 0, 1, color='k', alpha=0.02)
+    ax.vlines(start*u, -0.5, 1.5, lw=3, color=green, alpha=0.5)
+    ax.vlines(end*u, -0.5, 1.5, lw=3, color=red, alpha=0.5)
+    ax.set_xlabel("Time (s)")
 
 
 ##
@@ -785,7 +822,7 @@ def _bins_array(bins):
     return bins
 
 # not channel specific hidden function
-def _hist_burst_taildist(data, bins, pdf, weights=None, yscale='log',
+def _hist_burst_taildist(data, bins, pdf, ax, weights=None, yscale='log',
                          color=None, label=None, plot_style=None, vline=None):
     hist = HistData(*np.histogram(data[~np.isnan(data)],
                                   bins=_bins_array(bins), weights=weights))
@@ -799,18 +836,19 @@ def _hist_burst_taildist(data, bins, pdf, weights=None, yscale='log',
     if label is not None:
         plot_style['label'] = label
     default_plot_style.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plt.plot(hist.bincenters, ydata, **default_plot_style)
+    ax.plot(hist.bincenters, ydata, **default_plot_style)
     if vline is not None:
-        plt.axvline(vline, ls='--')
-    plt.yscale(yscale)
+        ax.axvline(vline, ls='--')
+    ax.set_yscale(yscale)
     if pdf:
-        plt.ylabel('PDF')
+        ax.set_ylabel('PDF')
     else:
-        plt.ylabel('# Bursts')
+        ax.set_ylabel('# Bursts')
 
 
+@_ax_intercept
 def hist_width(d, i=0, bins=(0, 10, 0.025), pdf=True, weights=None,
-               yscale='log', color=None, plot_style=None, vline=None):
+               yscale='log', color=None, plot_style=None, vline=None, ax=None):
     """Plot histogram of burst durations.
 
     Parameters:
@@ -824,6 +862,7 @@ def hist_width(d, i=0, bins=(0, 10, 0.025), pdf=True, weights=None,
         plot_style (dict): dict of matplotlib line style passed to `plot`.
         vline (float): If not None, plot vertical line at the specified x
             position.
+        ax (mpl.axes): axis where plot will be generated
     """
     if i is None:
         burst_widths = np.concatenate([mb.width for mb in d.mburst]) * d.clk_p * 1e3
@@ -831,16 +870,17 @@ def hist_width(d, i=0, bins=(0, 10, 0.025), pdf=True, weights=None,
         weights = weights[i] if weights is not None else None
         burst_widths = d.mburst[i].width * d.clk_p * 1e3
 
-    _hist_burst_taildist(burst_widths, bins, pdf, weights=weights, vline=vline,
+    _hist_burst_taildist(burst_widths, bins, pdf, ax, weights=weights, vline=vline,
                          yscale=yscale, color=color, plot_style=plot_style)
-    plt.xlabel('Burst width (ms)')
-    plt.xlim(xmin=0)
+    ax.set_xlabel('Burst width (ms)')
+    ax.set_xlim(xmin=0)
 
 
+@_ax_intercept
 def hist_brightness(d, i=0, bins=(0, 60, 1), pdf=True, weights=None,
                     yscale='log', gamma=1, add_naa=False, ph_sel=Ph_sel('all'), beta=1.,
                     donor_ref=True, naa_aexonly=False, naa_comp=False, na_comp=False,
-                    label_prefix=None, color=None, plot_style=None, vline=None):
+                    label_prefix=None, color=None, plot_style=None, vline=None, ax=None):
     """Plot histogram of burst brightness, i.e. burst size / duration.
 
     Parameters:
@@ -871,6 +911,7 @@ def hist_brightness(d, i=0, bins=(0, 60, 1), pdf=True, weights=None,
         plot_style (dict): dict of matplotlib line style passed to `plot`.
         vline (float): If not None, plot vertical line at the specified x
             position.
+        ax (mpl.axes): axis where plot will be generated
     """
     weights = weights[i] if weights is not None else None
     if plot_style is None:
@@ -894,10 +935,10 @@ def hist_brightness(d, i=0, bins=(0, 60, 1), pdf=True, weights=None,
     if 'label' not in plot_style:
         plot_style['label'] = label
 
-    _hist_burst_taildist(brightness, bins, pdf, weights=weights, vline=vline,
+    _hist_burst_taildist(brightness, bins, pdf, ax, weights=weights, vline=vline,
                          yscale=yscale, color=color, plot_style=plot_style)
-    plt.xlabel('Burst brightness (kHz)')
-    plt.legend(loc='best')
+    ax.set_xlabel('Burst brightness (kHz)')
+    ax.legend(loc='best')
 
 
 def _get_sizes_and_formula(d, ich, gamma, beta, donor_ref, add_naa,
@@ -927,11 +968,12 @@ def _get_sizes_and_formula(d, ich, gamma, beta, donor_ref, add_naa,
 
 
 # dependent on _hist_burst_taildist
+@_ax_intercept
 def hist_size(d, i=0, which='all', bins=(0, 600, 4), pdf=False, weights=None,
               yscale='log', gamma=1, beta=1, donor_ref=True, add_naa=False,
               ph_sel=None, naa_aexonly=False, naa_comp=False, na_comp=False,
               vline=None, label_prefix=None, legend=True, color=None,
-              plot_style=None):
+              plot_style=None, ax=None):
     """Plot histogram of "burst sizes", according to different definitions.
 
     Arguments:
@@ -969,6 +1011,7 @@ def hist_size(d, i=0, which='all', bins=(0, 600, 4), pdf=False, weights=None,
         plot_style (dict): dict of matplotlib line style passed to `plot`.
         vline (float): If not None, plot vertical line at the specified x
             position.
+        ax (mpl.axes): axis where plot will be generated
 
     See also:
         - :meth:`fretbursts.burstlib.Data.burst_sizes_ich`.
@@ -1002,14 +1045,15 @@ def hist_size(d, i=0, which='all', bins=(0, 600, 4), pdf=False, weights=None,
     elif color is not None:
         plot_style['color'] = color
 
-    _hist_burst_taildist(sizes, bins, pdf, weights=weights, yscale=yscale,
+    _hist_burst_taildist(sizes, bins, pdf, ax, weights=weights, yscale=yscale,
                          plot_style=plot_style, vline=vline)
-    plt.xlabel('Burst size')
+    ax.set_xlabel('Burst size')
     if legend:
-        plt.legend(loc='upper right')
+        ax.legend(loc='upper right')
 
 # depends on  _hist_burst_taildist
-def hist_size_all(d, i=0, **kwargs):
+@_ax_intercept
+def hist_size_all(d, i=0, ax=None, **kwargs):
     """Plot burst sizes for all the combinations of photons.
 
     Calls :func:`hist_size` multiple times with different `which` parameters.
@@ -1020,7 +1064,7 @@ def hist_size_all(d, i=0, **kwargs):
     elif 'PAX' in d.meas_type:
         fields += ['nda', 'naa']
     for which in fields:
-        hist_size(d, i, which=which, **kwargs)
+        hist_size(d, i, which=which, ax=ax, **kwargs)
 
 
 def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
@@ -1028,7 +1072,7 @@ def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
                    alpha=0.5, fillcolor=None):
     """Plot a fitted model overlay on a FRET histogram."""
     if ax is None:
-        ax2 = gca()
+        ax2 = plt.gca()
     else:
         ax2 = plt.twinx(ax=ax)
         ax2.grid(False)
@@ -1060,9 +1104,11 @@ def _fitted_E_plot(d, i=0, F=1, no_E=False, ax=None, show_model=True,
     xtext = 0.6 if d.E_fit[i] < 0.6 else 0.2
     if d.nch > 1 and not no_E:
         ax2.text(xtext, 0.81, "CH%d: $E_{fit} = %.3f$" % (i+1, d.E_fit[i]),
-                 transform=gca().transAxes, fontsize=16,
+                 transform=ax2.transAxes, fontsize=16,
                  bbox=dict(boxstyle='round', facecolor='#dedede', alpha=0.5))
 
+
+@_ax_intercept
 def hist_burst_data(
         d, i=0, data_name='E', ax=None, binwidth=0.03, bins=None,
         vertical=False, pdf=False, hist_style='bar',
@@ -1150,8 +1196,6 @@ def hist_burst_data(
     assert data_name in d
     fitter_name = data_name + '_fitter'
 
-    if ax is None:
-        ax = gca()
     ax.set_axisbelow(True)
     pline = ax.axhline if vertical else ax.axvline
     bar = ax.barh if vertical else ax.bar
@@ -1277,7 +1321,6 @@ def hist_fret(
 
     For detailed documentation see :func:`hist_burst_data`.
     """
-
     hist_burst_data(
         d, i, data_name='E', ax=ax, binwidth=binwidth, bins=bins,
         pdf=pdf, weights=weights, gamma=gamma, add_naa=add_naa,
@@ -1300,12 +1343,13 @@ def hist_S(
         show_model=False, show_model_peaks=True,
         hist_bar_style=None, hist_plot_style=None, model_plot_style=None,
         kde_plot_style=None, verbose=False):
-    """Plot S histogram and KDE.
+    """
+    Plot S histogram and KDE.
 
     The most used argument is `binwidth` that sets the histogram bin width.
 
-    For detailed documentation see :func:`hist_burst_data`.    """
-
+    For detailed documentation see :func:`hist_burst_data`.    
+    """
     hist_burst_data(
         d, i, data_name='S', ax=ax, binwidth=binwidth, bins=bins,
         pdf=pdf, weights=weights, gamma=gamma, add_naa=add_naa,
@@ -1328,12 +1372,12 @@ def _get_fit_text_stats(fit_arr, pylab=True):
     return fit_text
 
 
+@_ax_intercept
 def _plot_fit_text_ch(
         fit_arr, ich, fmt_str="CH%d: $E_{fit} = %.3f$", ax=None,
         bbox=dict(boxstyle='round', facecolor='#dedede', alpha=0.5),
         xtext_low=0.2, xtext_high=0.6, fontsize=16):
     """Plot a text box with ch and fit value."""
-    if ax is None: ax = gca()
     if ich is None:
         xtext = xtext_high if fit_arr[0] < xtext_high else xtext_low
     else:
@@ -1342,14 +1386,14 @@ def _plot_fit_text_ch(
             transform=ax.transAxes, fontsize=fontsize, bbox=bbox)
 
 
+@_ax_intercept
 def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
                 interp='bicubic', cmap='hot', under_color='white',
                 over_color='white', scatter=True, scatter_ms=3,
                 scatter_color='orange', scatter_alpha=0.2, gui_sel=False,
-                cbar_ax=None, grid_color='#D0D0D0'):
+                cbar_ax=None, grid_color='#D0D0D0', ax=None):
     """Plot 2-D E-S ALEX histogram with a scatterplot overlay.
     """
-    ax = plt.gca()
     d._calc_alex_hist(binwidth)
     ES_hist = np.sum(d.ES_hist, axis=0) if i is None else d.ES_hist[i]
     E_bins, S_bins, S_ax = d.E_bins, d.S_bins, d.S_ax
@@ -1372,7 +1416,7 @@ def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
     im.cmap.set_under(under_color)
     im.cmap.set_over(over_color)
     if cbar_ax is None:
-        gcf().colorbar(im)
+        ax.figure.colorbar(im)
     else:
         cbar_ax.colorbar(im)
     ax.set_xlim(-0.2, 1.2)
@@ -1382,11 +1426,12 @@ def hist2d_alex(d, i=0, vmin=2, vmax=0, binwidth=0.05, S_max_norm=0.8,
     ax.grid(color=grid_color)
     if gui_sel:
         # the selection object must be saved (otherwise will be destroyed)
-        hist2d_alex.gui_sel = gs.rectSelection(gcf(), gca())
+        hist2d_alex.gui_sel = gs.rectSelection(ax.figure, ax)
 
 
+@_ax_intercept
 def hexbin_alex(d, i=0, vmin=1, vmax=None, gridsize=80, cmap='Spectral_r',
-                E_name='E', S_name='S', **hexbin_kwargs):
+                E_name='E', S_name='S', ax=None, **hexbin_kwargs):
     """Plot an hexbin 2D histogram for E-S.
     """
     if i is None:
@@ -1399,10 +1444,10 @@ def hexbin_alex(d, i=0, vmin=1, vmax=None, gridsize=80, cmap='Spectral_r',
                           cmap=cmap, extent=(-0.2, 1.2, -0.2, 1.2), mincnt=1)
     if hexbin_kwargs is not None:
         hexbin_kwargs_.update(_normalize_kwargs(hexbin_kwargs))
-    poly = plt.hexbin(E, S, **hexbin_kwargs_)
+    poly = ax.hexbin(E, S, **hexbin_kwargs_)
     poly.set_clim(vmin, vmax)
-    plt.xlabel('E')
-    plt.ylabel('S')
+    ax.set_xlabel('E')
+    ax.set_ylabel('S')
 
 # channel independent
 def plot_ES_selection(ax, E1, E2, S1, S2, rect=True, **kwargs):
@@ -1456,10 +1501,13 @@ def get_ES_range():
         print('E1={E1:.3}, E2={E2:.3}, S1={S1:.3}, S2={S2:.3}'.format(**sel))
     return sel
 
+
+
+@_ax_intercept
 def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
                             ph_sel=Ph_sel('all'), period=None,
                             yscale='log', xscale='linear', xunit='ms',
-                            plot_style=None):
+                            plot_style=None, ax=None):
     """Plot histogram of interphoton delays for a single photon streams.
 
     Arguments:
@@ -1489,6 +1537,7 @@ def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
             'us', 'ns'. Default 'ms'.
         plot_style (dict): keyword arguments to be passed to matplotlib's
             `plot` function. Used to customize the plot style.
+        ax (mpl.axes): axis where plot will be generated
     """
     unit_dict = {'s': 1, 'ms': 1e3, 'us': 1e6, 'ns': 1e9}
     assert xunit in unit_dict
@@ -1529,26 +1578,27 @@ def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
         plot_style_['color'] = _ph_sel_color_dict[ph_sel]
         plot_style_['label'] = _ph_sel_label_dict[ph_sel]
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plot(t_ax[:n_trim] * scalex, counts[:n_trim], **plot_style_)
+    ax.plot(t_ax[:n_trim] * scalex, counts[:n_trim], **plot_style_)
 
     if yscale == 'log':
-        gca().set_yscale(yscale)
-        plt.ylim(1)
+        ax.set_yscale(yscale)
+        ax.set_ylim(1)
         _plot_status['hist_interphoton_single'] = {'autoscale': False}
     if xscale == 'log':
-        gca().set_xscale(yscale)
-        plt.xlim(0.5 * binwidth)
+        ax.set_xscale(yscale)
+        ax.set_xlim(0.5 * binwidth)
         _plot_status['hist_interphoton_single'] = {'autoscale': False}
-    plt.xlabel('Inter-photon delays (%s)' % xunit.replace('us', 'μs'))
-    plt.ylabel('# Delays')
+    ax.set_xlabel('Inter-photon delays (%s)' % xunit.replace('us', 'μs'))
+    ax.set_ylabel('# Delays')
     # Return internal variables so that other functions can extend the plot
     return dict(counts=counts, n_trim=n_trim, plot_style_=plot_style_,
                 t_ax=t_ax, scalex=scalex)
 
 
+@_ax_intercept
 def hist_interphoton(d, i=0, binwidth=1e-4, tmax=None, bins=None, period=None,
                      yscale='log', xscale='linear', xunit='ms', plot_style=None,
-                     show_da=False, legend=True):
+                     show_da=False, legend=True, ax=None):
     """Plot histogram of photon interval for different photon streams.
 
     Arguments:
@@ -1580,6 +1630,7 @@ def hist_interphoton(d, i=0, binwidth=1e-4, tmax=None, bins=None, period=None,
         show_da (bool): If False (default) do not plot the AexDem photon stream.
             Ignored when the measurement is not ALEX.
         legend (bool): If True (default) plot a legend.
+        ax (mpl.axes): axis where plot will be generated
     """
     # Plot multiple timetraces
     ph_sel_list = [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
@@ -1594,18 +1645,20 @@ def hist_interphoton(d, i=0, binwidth=1e-4, tmax=None, bins=None, period=None,
             hist_interphoton_single(d, i=i, binwidth=binwidth, tmax=tmax,
                                     bins=bins, period=period, ph_sel=ph_sel,
                                     yscale=yscale, xscale=xscale, xunit=xunit,
-                                    plot_style=plot_style)
+                                    plot_style=plot_style, ax=ax)
     if legend:
-        plt.legend(loc='best', fancybox=True)
+        ax.legend(loc='best', fancybox=True)
 
     if yscale == 'log' or xscale == 'log':
         _plot_status['hist_interphoton'] = {'autoscale': False}
 
+
 # TODO: condsider better method for displaying all channel, total bg histogram
+@_ax_intercept
 def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
                    ph_sel=Ph_sel('all'), period=0,
                    yscale='log', xscale='linear', xunit='ms', plot_style=None,
-                   show_fit=True, fit_style=None, manual_rate=None):
+                   show_fit=True, fit_style=None, manual_rate=None, ax=None):
     """Plot histogram of photon interval for a single photon streams.
 
     Optionally plots the fitted background as an exponential curve.
@@ -1619,6 +1672,7 @@ def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
             rate (ignoring the value saved in Data).
         fit_style (dict): arguments passed to matplotlib's `plot` for
             for plotting the exponential curve.
+        ax (mpl.axes): axis where plot will be generated
 
     For a description of all the other arguments see
     :func:`hist_interphoton_single`.
@@ -1626,7 +1680,7 @@ def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
     hist = hist_interphoton_single(d, i=i, binwidth=binwidth, tmax=tmax,
                                    bins=bins, ph_sel=ph_sel, period=period,
                                    yscale=yscale, xscale=xscale, xunit=xunit,
-                                   plot_style=None)
+                                   plot_style=None, ax=ax)
 
     if show_fit or manual_rate is not None:
         # Compute the fit function
@@ -1650,13 +1704,14 @@ def hist_bg_single(d, i=0, binwidth=1e-4, tmax=0.01, bins=None,
             label = str(ph_sel) if plt_label is None else plt_label
             fit_style_['label'] = '%s, %.2f kcps' % (label, bg_rate * 1e-3)
         n_trim = hist['n_trim']
-        plot(hist['t_ax'][:n_trim] * hist['scalex'], y_fit[:n_trim],
+        ax.plot(hist['t_ax'][:n_trim] * hist['scalex'], y_fit[:n_trim],
              **fit_style_)
 
 
+@_ax_intercept
 def hist_bg(d, i=0, binwidth=1e-4, tmax=0.01, bins=None, period=0,
             yscale='log', xscale='linear', xunit='ms', plot_style=None,
-            show_da=False, legend=True, show_fit=True, fit_style=None):
+            show_da=False, legend=True, show_fit=True, fit_style=None, ax=None):
     """Plot histogram of photon interval for different photon streams.
 
     Optionally plots the fitted background.
@@ -1668,6 +1723,7 @@ def hist_bg(d, i=0, binwidth=1e-4, tmax=0.01, bins=None, period=0,
             exponential distribution.
         fit_style (dict): arguments passed to matplotlib's `plot` for
             for plotting the exponential curve.
+        ax (mpl.axes): axis where plot will be generated
 
     For a description of all the other arguments see :func:`hist_interphoton`.
     """
@@ -1683,17 +1739,18 @@ def hist_bg(d, i=0, binwidth=1e-4, tmax=0.01, bins=None, period=0,
             hist_bg_single(d, i=i, period=period, binwidth=binwidth,
                            bins=bins, tmax=tmax, ph_sel=ph_sel, xunit=xunit,
                            show_fit=show_fit, yscale=yscale, xscale=xscale,
-                           plot_style=plot_style, fit_style=fit_style)
+                           plot_style=plot_style, fit_style=fit_style, ax=ax)
     if legend:
-        plt.legend(loc='best', fancybox=True)
+        ax.legend(loc='best', fancybox=True)
 
     if yscale == 'log' or xscale == 'log':
         _plot_status['hist_bg'] = {'autoscale': False}
 
 
+@_ax_intercept
 def hist_ph_delays(
         d, i=0, time_min_s=0, time_max_s=30, bin_width_us=10, mask=None,
-        yscale='log', hfit_bin_ms=1, efit_tail_min_us=1000, **kwargs):
+        yscale='log', hfit_bin_ms=1, efit_tail_min_us=1000, ax=None, **kwargs):
     """Histogram of ph delays and comparison with 3 BG fitting functions.
     """
     if i is None:
@@ -1715,9 +1772,9 @@ def hist_ph_delays(
             ph = ph[mask[i]]
         ph = ph[(ph < time_max_s/d.clk_p)*(ph > time_min_s/d.clk_p)]
     dph = np.diff(ph)*d.clk_p
-    H = hist(dph*1e6, bins=r_[0:1200:bin_width_us], histtype='step', **kwargs)
-    gca().set_yscale('log')
-    xlabel(u'Ph delay time (μs)'); ylabel("# Ph")
+    H = ax.hist(dph*1e6, bins=r_[0:1200:bin_width_us], histtype='step', **kwargs)
+    ax.set_yscale('log')
+    ax.set_xlabel(u'Ph delay time (μs)'); ax.set_ylabel("# Ph")
     F = 1 if 'normed' in kwargs else H[0].sum()*(bin_width_us)
 
     efun = lambda t, r: np.exp(-r*t)*r
@@ -1739,24 +1796,24 @@ def hist_ph_delays(
     t = r_[0:1200]*1e-6
     
     if rc_do:
-        plot(t*1e6, 0.65*F*efun(t, rc)*1e-6, lw=3, alpha=0.5, color=purple,
+        ax.plot(t*1e6, 0.65*F*efun(t, rc)*1e-6, lw=3, alpha=0.5, color=purple,
              label="%d cps - Exp CDF (tail_min_p=%.2f)" % (rc, efit_tail_min_us))
     if re_do:
-        plot(t*1e6, 0.65*F*efun(t, re)*1e-6, lw=3, alpha=0.5, color=red,
-             label="%d cps - Exp ML (tail_min_p=%.2f)" % (re, efit_tail_min_us))
+        ax.plot(t*1e6, 0.65*F*efun(t, re)*1e-6, lw=3, alpha=0.5, color=red,
+                label="%d cps - Exp ML (tail_min_p=%.2f)" % (re, efit_tail_min_us))
     if re_do and rg_do:
-        plot(t*1e6, 0.68*F*efun(t, rg)*1e-6, lw=3, alpha=0.5, color=green,
-             label=u"%d cps - Hist (bin_ms=%d) [Δ=%d%%]" % (hfit_bin_ms, rg,
+        ax.plot(t*1e6, 0.68*F*efun(t, rg)*1e-6, lw=3, alpha=0.5, color=green,
+                label=u"%d cps - Hist (bin_ms=%d) [Δ=%d%%]" % (hfit_bin_ms, rg,
                                                             100*(rg-re)/re))
-    plt.legend(loc='best', fancybox=True)
+    ax.legend(loc='best', fancybox=True)
 
 # TODO: update for concatenated data, probably fix bext.calc_mdelays_hist
+@_ax_intercept
 def hist_mdelays(d, i=0, m=10, bins_s=(0, 10, 0.02), period=0,
                  hold=False, bg_ppf=0.01, ph_sel=Ph_sel('all'), spline=True,
-                 s=1., bg_fit=True, bg_F=0.8):
+                 s=1., bg_fit=True, bg_F=0.8, ax=None):
     """Histogram of m-photons delays (all-ph vs in-burst ph).
     """
-    ax = gca()
     if not hold:
         #ax.clear()
         for _ind in range(len(ax.lines)): ax.lines.pop()
@@ -1797,35 +1854,36 @@ def hist_mdelays(d, i=0, m=10, bins_s=(0, 10, 0.02), period=0,
     burst_integral = np.trapz(x=bin_x[burst_domain],
                               y=mdelays_hist_y[burst_domain])
 
-    title("I = %.1f %%" % (burst_integral*100), fontsize='small')
+    ax.set_title("I = %.1f %%" % (burst_integral*100), fontsize='small')
     #text(0.8,0.8,"I = %.1f %%" % (integr*100), transform = gca().transAxes)
 
     ## MDelays plot
-    plot(bin_x, mdelays_pdf_y, lw=2, color=blue, alpha=0.5,
-         label="Delays dist.")
-    plot(bin_x, mdelays_b_pdf_y, lw=2, color=red, alpha=0.5,
-         label="Delays dist. (in burst)")
-    plt.axvline(max_delay_th_P, color='k',
-                label="BG ML dist. @ %.1f%%" % (bg_ppf*100))
-    plt.axvline(max_delay_th_F, color=purple,
-                label="BS threshold (F=%d)" % d.F)
+    ax.plot(bin_x, mdelays_pdf_y, lw=2, color=blue, alpha=0.5,
+            label="Delays dist.")
+    ax.plot(bin_x, mdelays_b_pdf_y, lw=2, color=red, alpha=0.5,
+            label="Delays dist. (in burst)")
+    ax.axvline(max_delay_th_P, color='k',
+               label="BG ML dist. @ %.1f%%" % (bg_ppf*100))
+    ax.axvline(max_delay_th_F, color=purple,
+               label="BS threshold (F=%d)" % d.F)
 
     ## Bg distribution plots
     bg_dist_y = bg_dist.pdf(bin_x)
     ibin_x_bg_mean = np.abs(bin_x - bg_dist.mean()).argmin()
     bg_dist_y *= mdelays_pdf_y[ibin_x_bg_mean]/bg_dist_y[ibin_x_bg_mean]
-    plot(bin_x, bg_dist_y, '--k', alpha=1.,
-         label='BG ML dist.')
-    plt.axvline(bg_dist.mean(), color='k', ls='--', label="BG mean")
+    ax.plot(bin_x, bg_dist_y, '--k', alpha=1.,
+            label='BG ML dist.')
+    ax.axvline(bg_dist.mean(), color='k', ls='--', label="BG mean")
     if bg_fit:
         bg_y = a*erlang.pdf(bin_x, a=m, scale=1./rate_kcps)
-        plot(bin_x, bg_y, '--k', alpha=1.)
-    plt.legend(ncol=2, frameon=False)
-    xlabel("Time (ms)")
+        ax.plot(bin_x, bg_y, '--k', alpha=1.)
+    ax.legend(ncol=2, frameon=False)
+    ax.set_xlabel("Time (ms)")
 
 
+@_ax_intercept
 def hist_mrates(d, i=0, m=10, bins=(0, 4000, 100), yscale='log', pdf=False,
-                dense=True, plot_style=None):
+                dense=True, plot_style=None, ax=None):
     """Histogram of m-photons rates. See also :func:`hist_mdelays`.
     """
     if i is None:
@@ -1845,13 +1903,15 @@ def hist_mrates(d, i=0, m=10, bins=(0, 4000, 100), yscale='log', pdf=False,
     ydata = hist.pdf if pdf else hist.counts
     plot_style_ = dict(marker='o')
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
-    plot(hist.bincenters, ydata, **plot_style_)
-    gca().set_yscale(yscale)
-    xlabel("Rates (kcps)")
+    ax.plot(hist.bincenters, ydata, **plot_style_)
+    ax.set_yscale(yscale)
+    ax.set_xlabel("Rates (kcps)")
+
 
 ## Bursts stats
+@_ax_intercept
 def hist_sbr(d, i=0, bins=(0, 30, 1), pdf=True, weights=None, color=None,
-             plot_style=None):
+             plot_style=None, ax=None):
     """Histogram of per-burst Signal-to-Background Ratio (SBR).
     """
     if i is None:
@@ -1861,13 +1921,14 @@ def hist_sbr(d, i=0, bins=(0, 30, 1), pdf=True, weights=None, color=None,
     if 'sbr' not in d:
         d.calc_sbr()
     sbr = np.concatenate(d.sbr) if i is None else d.sbr[i]
-    _hist_burst_taildist(sbr, bins, pdf, weights=weights, color=color,
+    _hist_burst_taildist(sbr, bins, pdf, ax, weights=weights, color=color,
                          plot_style=plot_style)
-    plt.xlabel('SBR')
+    ax.set_xlabel('SBR')
 
 
+@_ax_intercept
 def hist_burst_phrate(d, i=0, bins=(0, 1000, 20), pdf=True, weights=None,
-                      color=None, plot_style=None, vline=None):
+                      color=None, plot_style=None, vline=None, ax=None):
     """Histogram of max photon rate in each burst.
     """
     weights = weights[i] if weights is not None else None
@@ -1878,13 +1939,14 @@ def hist_burst_phrate(d, i=0, bins=(0, 1000, 20), pdf=True, weights=None,
             d.calc_max_rate(m=10)
         max_rate = np.concatenate(d.max_rate) if i is None else d.max_rate[i]
     
-    _hist_burst_taildist(max_rate * 1e-3, bins, pdf, weights=weights,
+    _hist_burst_taildist(max_rate * 1e-3, bins, pdf, ax, weights=weights,
                          color=color, plot_style=plot_style, vline=vline)
-    plt.xlabel('Peak rate (kcps)')
+    ax.set_xlabel('Peak rate (kcps)')
 
 
+@_ax_intercept
 def hist_burst_delays(d, i=0, bins=(0, 10, 0.2), pdf=False, weights=None,
-                      color=None, plot_style=None):
+                      color=None, plot_style=None, ax=None):
     """Histogram of waiting times between bursts.
     """
     if i is None:
@@ -1894,12 +1956,14 @@ def hist_burst_delays(d, i=0, bins=(0, 10, 0.2), pdf=False, weights=None,
         weights = weights[i] if weights is not None else None
         bdelays = np.diff(d.mburst[i].start*d.clk_p)
 
-    _hist_burst_taildist(bdelays, bins, pdf, weights=weights, color=color,
+    _hist_burst_taildist(bdelays, bins, pdf, ax, weights=weights, color=color,
                          plot_style=plot_style)
-    plt.xlabel('Delays between bursts (s)')
+    ax.set_xlabel('Delays between bursts (s)')
+
 
 ## Burst internal "symmetry"
-def hist_asymmetry(d, i=0, bin_max=2, binwidth=0.1, stat_func=np.median):
+@_ax_intercept
+def hist_asymmetry(d, i=0, bin_max=2, binwidth=0.1, stat_func=np.median, ax=None):
     if i is None:
         burst_asym = np.concatenate([bext.asymmetry(d, ich=j, func=stat_func) for j in range(d.nch)])
     else:
@@ -1914,13 +1978,13 @@ def hist_asymmetry(d, i=0, bin_max=2, binwidth=0.1, stat_func=np.median):
     asym_counts_pos = counts[izero:] - counts[:izero][::-1]
     asym_counts = np.hstack([asym_counts_neg, asym_counts_pos])
 
-    plt.bar(bins[:-1], width=binwidth, height=counts, fc=blue, alpha=0.5)
-    plt.bar(bins[:-1], width=binwidth, height=asym_counts, fc=red,
+    ax.bar(bins[:-1], width=binwidth, height=counts, fc=blue, alpha=0.5)
+    ax.bar(bins[:-1], width=binwidth, height=asym_counts, fc=red,
             alpha=0.5)
-    plt.grid(True)
-    plt.xlabel('Time (ms)')
-    plt.ylabel('# Bursts')
-    plt.legend(['{func}$(t_D)$ - {func}$(t_A)$'.format(func=stat_func.__name__),
+    ax.grid(True)
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('# Bursts')
+    ax.legend(['{func}$(t_D)$ - {func}$(t_A)$'.format(func=stat_func.__name__),
                 'positive half - negative half'],
                frameon=False, loc='best')
     skew_abs = asym_counts_neg.sum()
@@ -1930,8 +1994,46 @@ def hist_asymmetry(d, i=0, bin_max=2, binwidth=0.1, stat_func=np.median):
 ##
 #  Scatter plots
 #
+def linear_scale(arr):
+    """
+    Returns same array, without rescalling values
+    """
+    return arr
 
-def scatter_width_size(d, i=0):
+
+def log_scale(arr):
+    """Scale by log of arr"""
+    return np.log(arr)
+
+
+def kde_density(x, y, bw_method=None, rescalex=linear_scale, rescaley=linear_scale):
+    xa = rescalex(x)
+    ya = rescaley(y)
+    mask = ~np.isnan(xa) * ~np.isnan(ya) * (np.inf != x) * (np.inf != y) * (-np.inf != x) * (-np.inf != y)
+    if mask.sum() == 0:
+        raise ValueError("No valid bursts")
+    xy = np.vstack([xa[mask],ya[mask]])
+    colors = gaussian_kde(xy, bw_method=bw_method).evaluate(xy)
+    return x[mask], y[mask], colors
+
+
+@_ax_intercept
+def scatter_burst_data(d, xparam, yparam, i=0, ax=None, color_style='flat', 
+                       color_style_kwargs=None, xscale='linear', yscale='linear',
+                       **kwargs):
+    x = np.concatenate(getattr(d, xparam)) if i is None else getattr(d, xparam)[i]
+    y = np.concatenate(getattr(d, yparam)) if i is None else getattr(d, yparam)[i]
+    if callable(color_style) or color_style in ('kde', ):
+        color_style = kde_density if color_style == 'kde' else color_style
+        color_style_kwargs = dict() if color_style_kwargs is None else color_style_kwargs
+        x, y, c = color_style(x, y, **color_style_kwargs)
+        kwargs['c'] = c
+    ax.scatter(x, y, **kwargs)
+    pass
+
+    
+@_ax_intercept
+def scatter_width_size(d, i=0, ax=None):
     """Scatterplot of burst width versus size."""
     t_ms = arange(0, 50)
     if i is None:
@@ -1945,32 +2047,38 @@ def scatter_width_size(d, i=0):
         nt = d.nt[i]
         T = d.T[i]
         bg_mean = d.bg_mean[Ph_sel('all')][i]*t_ms*1e-3
-    plot(b, nt, 'o', mew=0, ms=3, alpha=0.7,
+    ax.plot(b, nt, 'o', mew=0, ms=3, alpha=0.7,
          color='blue')
     
-    plot(t_ms, ((d.m)/(T))*t_ms*1e-3, '--', lw=2, color='k',
-         label='Slope = m/T = min. rate = %1.0f cps' % (d.m/T))
-    plot(t_ms, bg_mean, '--', lw=2, color=red,
-         label='Noise rate: BG*t')
-    xlabel('Burst width (ms)'); ylabel('Burst size (# ph.)')
-    plt.xlim(0, 10); plt.ylim(0, 300)
-    legend(frameon=False)
+    ax.plot(t_ms, ((d.m)/(T))*t_ms*1e-3, '--', lw=2, color='k',
+            label='Slope = m/T = min. rate = %1.0f cps' % (d.m/T))
+    ax.plot(t_ms, bg_mean, '--', lw=2, color=red,
+            label='Noise rate: BG*t')
+    ax.set_label('Burst width (ms)')
+    ax.set_ylabel('Burst size (# ph.)')
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 300)
+    ax.legend(frameon=False)
 
 
-def scatter_rate_da(d, i=0):
+@_ax_intercept
+def scatter_rate_da(d, i=0, ax=None):
     """Scatter of nd rate vs na rate (rates for each burst)."""
     bw = np.concatenate([burst.width for burst in d.mburst]) if i is None else d.mburst[i].width
     nd = np.concatenate(d.nd) if i is None else d.nd[i]
     na = np.concatenate(d.na) if i is None else d.na[i]
     Rate = lambda nX: nX/bw/d.clk_p*1e-3
-    plot(Rate(nd), Rate(na), 'o', mew=0, ms=3, alpha=0.1, color='blue')
-    xlabel('D burst rate (kcps)'); ylabel('A burst rate (kcps)')
-    plt.xlim(-20, 100); plt.ylim(-20, 100)
-    legend(frameon=False)
+    ax.plot(Rate(nd), Rate(na), 'o', mew=0, ms=3, alpha=0.1, color='blue')
+    ax.set_xlabel('D burst rate (kcps)')
+    ax.set_ylabel('A burst rate (kcps)')
+    ax.set_xlim(-20, 100)
+    ax.set_ylim(-20, 100)
+    ax.legend(frameon=False)
 
 
+@_ax_intercept
 def scatter_fret_size(d, i=0, which='all', gamma=1, add_naa=False,
-                      plot_style=None):
+                      plot_style=None, ax=None):
     """Scatterplot of FRET efficiency versus burst size.
     """
     if which == 'all':
@@ -1987,24 +2095,26 @@ def scatter_fret_size(d, i=0, which='all', gamma=1, add_naa=False,
                        marker='o', markeredgewidth=0, markersize=3)
     plot_style_.update(_normalize_kwargs(plot_style, kind='line2d'))
     E = np.concatenate(d.E) if i is None else d.E[i]
-    plot(E, size, **plot_style_)
-    xlabel("FRET Efficiency (E)")
-    ylabel("Corrected Burst size (#ph)")
+    ax.plot(E, size, **plot_style_)
+    ax.set_xlabel("FRET Efficiency (E)")
+    ax.set_ylabel("Corrected Burst size (#ph)")
 
 
-def scatter_fret_nd_na(d, i=0, gamma=1., **kwargs):
+@_ax_intercept
+def scatter_fret_nd_na(d, i=0, gamma=1., ax=None, **kwargs):
     """Scatterplot of FRET versus gamma-corrected burst size."""
     default_kwargs = dict(mew=0, ms=3, alpha=0.3, color=blue)
     default_kwargs.update(**kwargs)
     E = np.concatenate(d.E) if i is None else d.E[i]
     nd = np.concatenate(d.nd) if i is None else d.nd[i]
     na = np.concatenate(d.na) if i is None else d.na[i]
-    plot(E, gamma*nd+na, 'o', **default_kwargs)
-    xlabel("FRET Efficiency (E)")
-    ylabel("Burst size (#ph)")
+    ax.plot(E, gamma*nd+na, 'o', **default_kwargs)
+    ax.set_xlabel("FRET Efficiency (E)")
+    ax.set_ylabel("Burst size (#ph)")
 
 
-def scatter_fret_width(d, i=0):
+@_ax_intercept
+def scatter_fret_width(d, i=0, ax=None):
     """Scatterplot of FRET versus burst width."""
     if i is None:        
         b = np.concatenate([mburst.width for mburst in d.mburst])*d.clk_p*1e3
@@ -2012,41 +2122,57 @@ def scatter_fret_width(d, i=0):
     else:
         b = d.mburst[i].width*d.clk_p*1e3
         E = d.E[i]
-    plot(E, b, 'o', mew=0, ms=3, alpha=0.1,
+    ax.plot(E, b, 'o', mew=0, ms=3, alpha=0.1,
          color="blue")
-    xlabel("FRET Efficiency (E)")
-    ylabel("Burst width (ms)")
+    ax.set_xlabel("FRET Efficiency (E)")
+    ax.set_ylabel("Burst width (ms)")
 
 
-def scatter_da(d, i=0, alpha=0.3):
+@_ax_intercept
+def scatter_da(d, i=0, alpha=0.3, ax=None):
     """Scatterplot of donor vs acceptor photons (nd, vs na) in each burst."""
     nd = np.concatenate(d.nd) if i is None else d.nd[i]
     na = np.concatenate(d.na) if i is None else d.na[i]
-    plot(nd, na, 'o', mew=0, ms=3, alpha=alpha, color='blue')
-    xlabel('# donor ph.'); ylabel('# acceptor ph.')
-    plt.xlim(-5, 200); plt.ylim(-5, 120)
+    ax.plot(nd, na, 'o', mew=0, ms=3, alpha=alpha, color='blue')
+    ax.set_xlabel('# donor ph.'); ax.set_ylabel('# acceptor ph.')
+    ax.set_xlim(-5, 200)
+    ax.set_ylim(-5, 120)
 
 
-def scatter_naa_nt(d, i=0, alpha=0.5):
+@_ax_intercept
+def scatter_naa_nt(d, i=0, alpha=0.5, color_style='flat', ax=None, **kwargs):
     """Scatterplot of nt versus naa."""
-    nt = np.concatenate(d.nt) if i is None else d.nt[i]
-    naa = np.concatenate(d.naa) if i is None else d.naa[i]
-    plot(nt, naa, 'o', mew=0, ms=3, alpha=alpha, color='blue')
-    plot(arange(200), color='k', lw=2)
-    xlabel('Total burst size (nd+na+naa)'); ylabel('Accept em-ex BS (naa)')
-    plt.xlim(-5, 200); plt.ylim(-5, 120)
+    plot_style = _normalize_kwargs(dict(lw=0, s=17, alpha=alpha), 'scatter')
+    if color_style == 'flat':
+        plot_style['c'] = 'blue'
+    plot_style.update(_normalize_kwargs(kwargs, 'scatter'))
+    scatter_burst_data(d, 'nt', 'naa', i=i, **plot_style)
+    ax.plot(arange(200), color='k', lw=2)
+    ax.set_xlabel('Total burst size (nd+na+naa)')
+    ax.set_ylabel('Accept em-ex BS (naa)')
+    ax.set_xlim(-5, 200)
+    ax.set_ylim(-5, 120)
 
-def scatter_alex(d, i=0, **kwargs):
-    """Scatterplot of E vs S. Keyword arguments passed to `plot`."""
-    plot_style = dict(mew=1, ms=4, mec='black', color='purple',
-                      alpha=0.1)
-    plot_style = _normalize_kwargs(plot_style, 'line2d')
-    plot_style.update(_normalize_kwargs(kwargs, 'line2d'))
-    E = np.concatenate(d.E) if i is None else d.E[i]
-    S = np.concatenate(d.S) if i is None else d.S[i]
-    plot(E, S, 'o', **plot_style)
-    xlabel("E"); ylabel('S')
-    plt.xlim(-0.2, 1.2); plt.ylim(-0.2, 1.2)
+
+@_ax_intercept
+def scatter_alex(d, i=0, color_style='flat', ax=None, **kwargs):
+    """
+    Scatterplot of E vs S. Keyword arguments passed to `plot`.
+    If `color_style` is 'flat' (default) will use uniform color that can be set
+    with the 'c' keyword argument.
+    If `color_style` is 'kde', then will color based on gaussian_kde density. 
+    Control color map with cmap keyword argument
+    """
+    plot_style = dict(s=10, alpha=0.1)
+    if color_style == 'flat':
+        plot_style.update(c= 'purple', ec='black', lw=1)
+    plot_style = _normalize_kwargs(plot_style, 'scatter')
+    plot_style.update(_normalize_kwargs(kwargs, 'scatter'))
+    scatter_burst_data(d, 'E', 'S', i=i, color_style=color_style, **plot_style)
+    ax.set_xlabel("E")
+    ax.set_ylabel('S')
+    ax.set_xlim(-0.2, 1.2)
+    ax.set_ylim(-0.2, 1.2)
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2100,9 +2226,8 @@ def _iter_plot(d, func, kwargs, iter_ch, nrows, ncols, figsize, AX,
                     titlex, ha = 1 - titlex, 'left'
                 ax.text(titlex, titley, s, transform=ax.transAxes, ha=ha, va=va,
                         **title_kws)
-        plt.sca(ax)
         gui_status['first_plot_in_figure'] = (i == 0)
-        func(d, ich, **kwargs)
+        func(d, ich, ax=ax, **kwargs)
         if ax.legend_ is not None:
             ax.legend_.remove()
     [a.set_xlabel('') for a in AX[:-1, :].ravel()]
@@ -2167,8 +2292,8 @@ def dplot_48ch(d, func, sharex=True, sharey=True, layout='horiz',
 
 
 def dplot_16ch(d, func, sharex=True, sharey=True, ncols=8,
-               pgrid=True, figsize=None, AX=None, suptitle=True,
-               scale=True, skip_ch=None, top=0.93, bottom=None,
+               grid=True, figsize=None, AX=None, suptitle=True,
+               tile='out', scale=True, skip_ch=None, top=0.93, bottom=None,
                hspace=0.15, wspace=None, left=0.08, right=0.96, **kwargs):
     """Plot wrapper for 16-spot measurements. Use `dplot` instead."""
     assert (ncols <= 16), '`ncols` needs to be <= 16.'
@@ -2181,11 +2306,11 @@ def dplot_16ch(d, func, sharex=True, sharey=True, ncols=8,
     return _iter_plot(d, func, kwargs, iter_ch, nrows, ncols, figsize, AX,
                       sharex, sharey, suptitle, grid, scale, skip_ch=skip_ch,
                       top=top, bottom=bottom, hspace=hspace, wspace=wspace,
-                      left=left, right=right)
+                      left=left, right=right, title=tile)
 
 
 def dplot_8ch(d, func, sharex=True, sharey=True,
-              pgrid=True, figsize=(12, 9), nosuptitle=False, AX=None,
+              grid=True, figsize=(12, 9), nosuptitle=False, AX=None,
               scale=True, **kwargs):
     """Plot wrapper for 8-spot measurements. Use `dplot` instead."""
     global gui_status
@@ -2214,10 +2339,9 @@ def dplot_8ch(d, func, sharex=True, sharey=True,
             s += (u', T=%dμs' % (d.T[i]*1e6))
         if b is not None: s += (', #bu=%d' %  b.num_bursts)
         ax.set_title(s, fontsize=12)
-        ax.grid(pgrid)
-        plt.sca(ax)
+        ax.grid(grid)
         gui_status['first_plot_in_figure'] = (i == 0)
-        func(d, i, **kwargs)
+        func(d, i, ax=ax, **kwargs)
         if i % 2 == 1: ax.yaxis.tick_right()
     [a.set_xlabel('') for a in AX[:-1, :].ravel()]
     [a.set_ylabel('') for a in AX[:, 1:].ravel()]
@@ -2238,7 +2362,7 @@ def dplot_8ch(d, func, sharex=True, sharey=True,
     return AX
 
 
-def dplot_1ch(d, func, pgrid=True, ax=None,
+def dplot_1ch(d, func, grid=True, ax=None,
               figsize=(9, 4.5), fignum=None, nosuptitle=False, **kwargs):
     """Plot wrapper for single-spot measurements. Use `dplot` instead."""
     global gui_status
@@ -2256,10 +2380,9 @@ def dplot_1ch(d, func, pgrid=True, ax=None,
         s += (', #bu=%d' % d.num_bursts[0])
     if not nosuptitle:
         ax.set_title(s, fontsize=12)
-    ax.grid(pgrid)
-    plt.sca(ax)
+    ax.grid(grid)
     gui_status['first_plot_in_figure'] = True
-    func(d, **kwargs)
+    func(d, ax=ax, **kwargs)
     return ax
 
 
@@ -2463,26 +2586,52 @@ def alex_jointplot(d, i=0, gridsize=50, cmap='Spectral_r', kind='hex',
                  bbox=dict(edgecolor='r', facecolor='none', lw=1.3, alpha=0.5))
     return g
 
+
 def _register_colormaps():
+    from sys import version_info
+    if version_info.minor < 10:
+        from importlib_metadata import version
+    else:
+        from importlib.metadata import version
+    new = tuple(int(v) for v in version('matplotlib').split('.'))[:2] > (3, 5)
     import matplotlib as mpl
     import seaborn as sns
 
-    c = sns.color_palette('nipy_spectral', 64)[2:43]
-    cmap = mpl.colors.LinearSegmentedColormap.from_list('alex_lv', c)
-    cmap.set_under(alpha=0)
-    mpl.colormaps.register(name='alex_lv', cmap=cmap)
+    if new:
+        c = sns.color_palette('nipy_spectral', 64)[2:43]
+        cmap = mpl.colors.LinearSegmentedColormap.from_list('alex_lv', c)
+        cmap.set_under(alpha=0)
+        mpl.colormaps.register(name='alex_lv', cmap=cmap)
+    
+        c = sns.color_palette('YlGnBu', 64)[16:]
+        cmap = mpl.colors.LinearSegmentedColormap.from_list('alex', c)
+        cmap.set_under(alpha=0)
+        mpl.colormaps.register(name='alex_light', cmap=cmap)
+        mpl.colormaps.register(name='YlGnBu_crop', cmap=cmap)
+        mpl.colormaps.register(name='alex_dark', cmap=mpl.cm.GnBu_r)
+    
+        # Temporary hack to workaround issue
+        # https://github.com/mwaskom/seaborn/issues/855
+        mpl.cm.alex_light = mpl.colormaps.get_cmap('alex_light')
+        mpl.cm.alex_dark = mpl.colormaps.get_cmap('alex_dark')
+    else:
+        c = sns.color_palette('nipy_spectral', 64)[2:43]
+        cmap = mpl.colors.LinearSegmentedColormap.from_list('alex_lv', c)
+        cmap.set_under(alpha=0)
+        mpl.cm.register_cmap(name='alex_lv', cmap=cmap)
+    
+        c = sns.color_palette('YlGnBu', 64)[16:]
+        cmap = mpl.colors.LinearSegmentedColormap.from_list('alex', c)
+        cmap.set_under(alpha=0)
+        mpl.cm.register_cmap(name='alex_light', cmap=cmap)
+        mpl.cm.register_cmap(name='YlGnBu_crop', cmap=cmap)
+        mpl.cm.register_cmap(name='alex_dark', cmap=mpl.cm.GnBu_r)
+    
+        # Temporary hack to workaround issue
+        # https://github.com/mwaskom/seaborn/issues/855
+        mpl.cm.alex_light = mpl.cm.get_cmap('alex_light')
+        mpl.cm.alex_dark = mpl.cm.get_cmap('alex_dark')
 
-    c = sns.color_palette('YlGnBu', 64)[16:]
-    cmap = mpl.colors.LinearSegmentedColormap.from_list('alex', c)
-    cmap.set_under(alpha=0)
-    mpl.colormaps.register(name='alex_light', cmap=cmap)
-    mpl.colormaps.register(name='YlGnBu_crop', cmap=cmap)
-    mpl.colormaps.register(name='alex_dark', cmap=mpl.cm.GnBu_r)
-
-    # Temporary hack to workaround issue
-    # https://github.com/mwaskom/seaborn/issues/855
-    mpl.cm.alex_light = mpl.colormaps.get_cmap('alex_light')
-    mpl.cm.alex_dark = mpl.colormaps.get_cmap('alex_dark')
 
 
 # Register colormaps on import if not mocking

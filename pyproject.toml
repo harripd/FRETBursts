@@ -1,7 +1,7 @@
 [build-system]
 requires = [
     "setuptools>=64", 
-    "setuptools_scm>=8",
+    "setuptools_scm>=6.0",
     "cython>=0.29", 
     "oldest-supported-numpy",
 ]
@@ -29,6 +29,7 @@ classifiers = [
  ]
 requires-python = ">= 3.6"
 dependencies = [
+    "importlib_metadata;python_version<='3.9'",
     "numpy>=1.19", 
     "matplotlib>=3.0.1", 
     "scipy>=1.2", 

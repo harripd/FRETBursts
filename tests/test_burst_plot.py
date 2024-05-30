@@ -42,7 +42,7 @@ if has_matplotlib:
 
 
 # data subdir in the notebook folder
-DATASETS_DIR = u'notebooks/data/'
+DATASETS_DIR = u'../notebooks/data/'
 
 
 def _alex_process(d):
@@ -219,6 +219,8 @@ def ES_plots(request):
 def test_ES_plots(data_alex, ES_plots):
     d = data_alex
     bplt.dplot(d, ES_plots, i=None)
+    if ES_plots in (bplt.scatter_alex, bplt.scatter_naa_nt):
+        bplt.dplot(d, ES_plots, i=0, color_style='kde')
     for i in range(d.nch):
         bplt.dplot(d, ES_plots, i=i)
 

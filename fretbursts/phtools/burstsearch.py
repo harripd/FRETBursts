@@ -197,6 +197,7 @@ try:
     print(" - Optimized (cython) burst search loaded.")
 except ImportError:
     bsearch = bsearch_py
+    mch_count_ph_in_bursts = mch_count_ph_in_bursts_py
     print(" - Fallback to pure python burst search.")
 
 
