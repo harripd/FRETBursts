@@ -6,9 +6,9 @@ import numpy as np
 project_name = 'fretbursts'
 
 from Cython.Build import cythonize
-ext_modules = [Extension("burstsearch_c",
+ext_modules = [Extension("fretbursts.burstsearch_c",
                          [project_name + "/phtools/burstsearch_c.pyx"]),
-               Extension("phrates_c",
+               Extension("fretbursts.phrates_c",
                          [project_name + "/phtools/phrates_cy.pyx"],
                           include_dirs = ["."],)]
 
