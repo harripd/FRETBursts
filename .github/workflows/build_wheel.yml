@@ -1,10 +1,9 @@
 name: Build
 
 on:
-  workflow_run:
-    workflows: [Tests]
+  label:
     types:
-      - completed
+      - created
     branches:
       - master
 
