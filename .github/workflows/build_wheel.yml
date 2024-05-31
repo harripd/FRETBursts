@@ -1,10 +1,9 @@
 name: Build
 
 on:
-  label:
-    push:
-      branches:
-        - created
+  push:
+    branches:
+      - created
   pull_request:
     branches:
       - master
