@@ -1,6 +1,15 @@
 FRETBursts Release Notes
 ========================
 
+Version 0.8.0 (Jun. 2024)
+------------------------
+
+- Removed support for Python 3.6, as Python 3.7 now in end of life and 3.6 not supported
+- Switch to using setuptools_scm for version managemnt instead of versioneer
+- Updates for newer numpy compatibility (deprecation of np.float)
+- Introduce :func:`burst_plot.scatter_burst_data` function for scatter plotting (currently now used in :func:`scatter_naa_nt` and :func:`scatter_alex`) to normalize scatter ploting.
+- use of :func:`burst_plot.scatter_burst_data` enables KDE density estimation with keyword argument `color_style='kde'` 
+
 Version 0.7.1
 -------------
 

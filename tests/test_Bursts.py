@@ -72,4 +72,4 @@ def test_BurstsGap():
 
 
 if __name__ == '__main__':
-    pytest.main("-x -v fretbursts/tests/test_Bursts.py")
+    pytest.main("-x -v tests/test_Bursts.py")

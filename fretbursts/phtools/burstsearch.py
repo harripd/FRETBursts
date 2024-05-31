@@ -191,20 +191,15 @@ def mch_count_ph_in_bursts_py(Mburst, Mask):
 #
 
 try:
-    from burstsearch_c import bsearch_c
+    from fretbursts.burstsearch_c import bsearch_c, mch_count_ph_in_bursts_c
     bsearch = bsearch_c
+    mch_count_ph_in_bursts = mch_count_ph_in_bursts_c
     print(" - Optimized (cython) burst search loaded.")
 except ImportError:
     bsearch = bsearch_py
+    mch_count_ph_in_bursts = mch_count_ph_in_bursts_py
     print(" - Fallback to pure python burst search.")
 
-try:
-    from burstsearch_c import mch_count_ph_in_bursts_c
-    mch_count_ph_in_bursts = mch_count_ph_in_bursts_c
-    print(" - Optimized (cython) photon counting loaded.")
-except ImportError:
-    mch_count_ph_in_bursts = mch_count_ph_in_bursts_py
-    print(" - Fallback to pure python photon counting.")
 
 
 class Burst(namedtuple('Burst', ['istart', 'istop', 'start', 'stop'])):

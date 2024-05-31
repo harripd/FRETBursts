@@ -13,20 +13,15 @@ import pytest
 import numpy as np
 
 
-try:
-    import matplotlib
-except ImportError:
-    has_matplotlib = False  # OK to run tests without matplotlib
-else:
-    has_matplotlib = True
-    matplotlib.use('Agg')  # but if matplotlib is installed, use Agg
-
-try:
-    import numba
-except ImportError:
-    has_numba = False
-else:
-    has_numba = True
+import matplotlib
+matplotlib.use('Agg')  # but if matplotlib is installed, use Agg
+import matplotlib.pyplot as plt
+# try:
+#     import numba
+# except ImportError:
+#     has_numba = False
+# else:
+#     has_numba = True
 
 
 import fretbursts.background as bg
@@ -37,12 +32,11 @@ from fretbursts import loader
 from fretbursts import select_bursts
 from fretbursts.ph_sel import Ph_sel
 from fretbursts.phtools import phrates
-if has_matplotlib:
-    import fretbursts.burst_plot as bplt
+import fretbursts.burst_plot as bplt
 
 
 # data subdir in the notebook folder
-DATASETS_DIR = u'data/'
+DATASETS_DIR = u'../notebooks/data/'
 
 
 def _alex_process(d):
@@ -59,7 +53,7 @@ def load_dataset_1ch(process=True):
     return d
 
 def load_dataset_1ch_nsalex(process=True):
-    fn = "dsdna_d7_d17_50_50_1.hdf5"
+    fn = "HP3_TE150_SPC630.hdf5"
     fname = DATASETS_DIR + fn
     d = loader.photon_hdf5(fname)
     if process:
@@ -149,14 +143,17 @@ def data_alex(request):
 def test_mch_plot_bg(data_mch):
     d = data_mch
     bplt.mch_plot_bg(d)
+    plt.close()
 
 def test_mch_plot_bg_ratio(data_mch):
     d = data_mch
     bplt.mch_plot_bg_ratio(d)
+    plt.close()
 
 def test_mch_plot_bsize(data_mch):
     d = data_mch
     bplt.mch_plot_bsize(d)
+    plt.close()
 
 ##
 #  Timetrace plots
@@ -175,6 +172,7 @@ def test_trace_single(data, ratetraces):
     for i in range(d.nch):
         for ph_sel in ph_sel_list:
             bplt.dplot(d, ratetraces, i=i, ph_sel=ph_sel)
+    plt.close()
 
 @pytest.fixture(scope='module', params = (bplt.timetrace, bplt.ratetrace, 
                                           bplt.timetrace_bg, bplt.timetrace_fret,
@@ -186,7 +184,8 @@ def test_trace(data, timetraces):
     """Test general time trace type functions"""
     d = data
     for i in range(d.nch):
-            bplt.dplot(d, timetraces, i=i)
+        bplt.dplot(d, timetraces, i=i)
+    plt.close()
 
 
 @pytest.fixture(scope='module', params = (bplt.hist_size, bplt.hist_width,
@@ -204,12 +203,14 @@ def test_hist(data, hists):
     bplt.dplot(d, hists, i=None)
     for i in range(d.nch):
         bplt.dplot(d, hists, i=i)
+    plt.close()
 
 def test_hist_S(data_alex):
     d = data_alex
     bplt.dplot(d, bplt.hist_S, i=None)
     for i in range(d.nch):
         bplt.dplot(d, bplt.hist_S)
+    plt.close()
 
 @pytest.fixture(scope='module', params = (bplt.hist2d_alex, bplt.hexbin_alex,
                                           bplt.scatter_alex, bplt.scatter_naa_nt))
@@ -219,8 +220,11 @@ def ES_plots(request):
 def test_ES_plots(data_alex, ES_plots):
     d = data_alex
     bplt.dplot(d, ES_plots, i=None)
+    if ES_plots in (bplt.scatter_alex, bplt.scatter_naa_nt):
+        bplt.dplot(d, ES_plots, i=0, color_style='kde')
     for i in range(d.nch):
         bplt.dplot(d, ES_plots, i=i)
+    plt.close()
 
 @pytest.fixture(scope='module', params = (bplt.scatter_width_size, bplt.scatter_rate_da,
                                           bplt.scatter_fret_size, bplt.scatter_fret_nd_na,
@@ -233,3 +237,4 @@ def test_scatterplots(data, scatterplots):
     bplt.dplot(d, scatterplots, i=None)
     for i in range(d.nch):
         bplt.dplot(d, scatterplots, i=i)
+    plt.close()

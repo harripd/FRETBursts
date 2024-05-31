@@ -44,7 +44,7 @@ if has_matplotlib:
 
 
 # data subdir in the notebook folder
-DATASETS_DIR = u'data/'
+DATASETS_DIR = u'../notebooks/data/'
 
 
 def _alex_process(d):
@@ -790,6 +790,7 @@ def test_phrates_mtuple(data):
 
 
 if has_numba:
+# if True:
     def test_phrates_kde(data):
         d = data
         tau = 5000  # 5000 * 12.5ns = 6.25 us
@@ -800,12 +801,12 @@ if has_numba:
             ratesl, nph = phrates.nb.kde_laplace_nph(ph, tau)
             assert (rates == ratesl).all()
             assert (nph == nrect).all()
-
+    
             # Test consistency of kde_laplace and _kde_laplace_self_numba
             ratesl2, nph2 = phrates.nb.kde_laplace_self_numba(ph, tau)
             assert (nph2 == nrect).all()
             assert (ratesl2 == rates).all()
-
+    
             # Smoke test laplace, gaussian, rect with time_axis
             ratesl = phrates.kde_laplace(ph, tau, time_axis=ph+1)
             assert ((ratesl >= 0) * (ratesl < 5e6)).all()
@@ -1172,4 +1173,4 @@ def test_norm_pdf():
             assert np.allclose(normpdf(x, c, mu), norm.pdf(x, loc=c, scale=mu))
 
 if __name__ == '__main__':
-    pytest.main("-x -v fretbursts/tests/test_burstlib.py")
+    pytest.main("-x -v tests/test_burstlib.py")

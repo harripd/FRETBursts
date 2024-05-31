@@ -434,9 +434,9 @@ def burst_photons(dx, skip_ch=None):
     else:
         stream = dx.A_em[ich].view('int8')
     times_arr = np.hstack(
-        burstlib.iter_bursts_ph(dx.ph_times_m[ich], dx.mburst[ich]))
+        list(burstlib.iter_bursts_ph(dx.ph_times_m[ich], dx.mburst[ich])))
     stream_arr = np.hstack(
-        burstlib.iter_bursts_ph(stream, dx.mburst[ich]))
+        list(burstlib.iter_bursts_ph(stream, dx.mburst[ich])))
 
     burst_id, ph_id = [], []
     for i, arr in enumerate(burstlib.iter_bursts_ph(stream, dx.mburst[ich])):
@@ -449,7 +449,7 @@ def burst_photons(dx, skip_ch=None):
     columns = ['timestamp', 'stream']
     if dx.lifetime:
         nanot_arr = np.hstack(
-            burstlib.iter_bursts_ph(dx.nanotimes[ich], dx.mburst[ich]))
+            list(burstlib.iter_bursts_ph(dx.nanotimes[ich], dx.mburst[ich])))
         bph['nanotime'] = nanot_arr
         columns = ['timestamp', 'nanotime', 'stream']
     burstph = pd.DataFrame(bph, index=[burst_id, ph_id], columns=columns)
@@ -554,22 +554,17 @@ def bursts_fitter(dx, burst_data='E', save_fitter=True,
     return fitter
 
 
-def _get_bg_distrib_erlang(d, ich=0, m=10, ph_sel=Ph_sel('all'),
+def _get_bg_distrib_erlang(d, ich=None, m=10, ph_sel=Ph_sel('all'),
                            period=(0, -1)):
     """Return a frozen (scipy) erlang distrib. with rate equal to the bg rate.
     """
+    if ich is None:
+        ich = tuple(range(d.nch))
     assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
     # fix negative periods so wrapping occurs coorectly
-    parr = np.array(period)
-    for i, p in enumerate(parr):
-        if p < 0:
-            parr[i] = len(d.Lim[ich]) - p + 1
-    period = tuple(parr)
     # Compute the BG distribution
-    bg_ph = d.bg[ph_sel][ich]
-
-    rate_ch_kcps = bg_ph[period[0]:period[1]+1].mean()/1e3  # bg rate in kcps
-    bg_dist = erlang(a=m, scale=1./rate_ch_kcps)
+    rate_ch_kcps = np.concatenate([d.bg[ph_sel][i][p[0]:p[1]] for i, p in zip(ich, period)]).mean() / 1e3
+    bg_dist = erlang(a=m, scale=1.0/rate_ch_kcps)
     return bg_dist
 
 
@@ -611,6 +606,25 @@ def histogram_mdelays(d, ich=0, m=10, ph_sel=Ph_sel('all'),
     return hist
 
 
+def _get_mdelay_channel(d, ph_sel, i, period, bursts):
+    if ph_sel == Ph_sel('all'):
+        ph = d.ph_times_m[i][period]
+        if bursts:
+            phb = ph[d.ph_in_bursts_mask_ich(ich=i)[period]]
+    elif ph_sel == Ph_sel(Dex='Dem'):
+        donor_ph_period = ~d.A_em[i][period]
+        ph = d.ph_times_m[i][period][donor_ph_period]
+        if bursts:
+            phb = ph[d.ph_in_bursts_mask(ich=i)[period][donor_ph_period]]
+    elif ph_sel == Ph_sel(Dex='Aem'):
+        accept_ph_period = d.A_em[i][period]
+        ph = d.ph_times_m[i][period][accept_ph_period]
+        if bursts:
+            phb = ph[d.ph_in_bursts_mask(ich=i)[period][accept_ph_period]]
+    if not bursts:
+        phb = None
+    return ph, phb
+
 # TODO: add tests beyond simple smoke tests
 def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
                       ph_sel=Ph_sel('all'), bursts=False, bg_fit=True,
@@ -620,6 +634,7 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
     Arguments:
         dx (Data object): contains the burst data to process.
         ich (int): the channel number. Default 0.
+        period (tuple): tuple of the range of periods for calculating
         m (int): number of photons used to compute each delay.
         period (int or 2-element tuple): index of the period to use. If
             tuple, the period range between period[0] and period[1]
@@ -639,29 +654,24 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
           bin_x > bg_mean*bg_F. Returned only if `bg_fit` is True.
     """
     assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
-    if np.size(period) == 1:
-        period = (period, period)
-    periods = slice(d.Lim[ich][period[0]][0], d.Lim[ich][period[1]][1] + 1)
+    if ich is None:
+        ich = tuple(range(d.nch))
+    elif np.issubdtype(type(ich), np.integer):
+        ich = (ich, )
+    elif np.size(ich) == 2:
+        ich = tuple(range(ich[0], ich[1]))
+    if np.issubdtype(type(ich), np.integer):
+        period = (ich, ich+1)
+    if np.issubdtype(type(period), np.integer):
+        period = (period, period+1)
+    if np.issubdtype(type(period[0]), np.integer):
+        period = tuple(period for _ in ich)
+    periods = tuple(slice(d.Lim[i][p[0]][0], d.Lim[i][p[1]][1] + 1) for i, p in zip(ich, period))
     bins = np.arange(*bins_s)
-
-    if ph_sel == Ph_sel('all'):
-        ph = d.ph_times_m[ich][periods]
-        if bursts:
-            phb = ph[d.ph_in_bursts_mask_ich(ich=ich)[periods]]
-    elif ph_sel == Ph_sel(Dex='Dem'):
-        donor_ph_period = ~d.A_em[ich][periods]
-        ph = d.ph_times_m[ich][periods][donor_ph_period]
-        if bursts:
-            phb = ph[d.ph_in_bursts_mask(ich=ich)[periods][donor_ph_period]]
-    elif ph_sel == Ph_sel(Dex='Aem'):
-        accept_ph_period = d.A_em[ich][periods]
-        ph = d.ph_times_m[ich][periods][accept_ph_period]
-        if bursts:
-            phb = ph[d.ph_in_bursts_mask(ich=ich)[periods][accept_ph_period]]
-
-    ph_mdelays = np.diff(ph[::m])*d.clk_p*1e3        # millisec
+    ph, phb = zip(*(_get_mdelay_channel(d, ph_sel, i, prds, bursts) for i, prds, in zip(ich, periods)))
+    ph_mdelays = np.concatenate([np.diff(ph_[::m])*d.clk_p*1e3 for ph_ in ph])       # millisec
     if bursts:
-        phb_mdelays = np.diff(phb[::m])*d.clk_p*1e3  # millisec
+        phb_mdelays = np.concatenate([np.diff(phb_[::m])*d.clk_p*1e3 for phb_ in phb])  # millisec
         phb_mdelays = phb_mdelays[phb_mdelays < 5]
 
     # Compute the PDF through histograming
@@ -697,7 +707,7 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
 
         p, flag = leastsq(err_func, x0=[0.9, 3.], args=(_x, _y))
         a, rate_kcps = p
-        results.extend([a, rate_kcps])
+        results += [a, rate_kcps]
 
     return results
 

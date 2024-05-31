@@ -322,7 +322,7 @@ class FitterBase:
         self.hist_binwidth = (bins[1] - bins[0])
         self.hist_axis = bins[:-1] + 0.5*self.hist_binwidth
         self.hist_counts = np.array(hist_counts)
-        self.hist_pdf = np.array(hist_counts, dtype=np.float)
+        self.hist_pdf = np.array(hist_counts, dtype=np.float64)
         self.hist_pdf /= self.hist_counts.sum(axis=1)[:, np.newaxis]
         self.hist_pdf /= self.hist_binwidth
         self._hist_computed = True
