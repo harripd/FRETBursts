@@ -17,9 +17,8 @@ Installing latest stable version
 
 The preferred way to to install and keep FRETBursts updated is through
 `conda`, a package manager used by Anaconda scientific python distribution.
-If you haven't done it already, please install the python3 version of
-`Continuum Anaconda distribution <https://www.continuum.io/downloads>`__
-(legacy python 2.7 works at the moment but it will be discontinued soon).
+If you haven't done it already, please install the python3. We recommend using `Anaconda <https://docs.anaconda.com/free/anaconda/install/>`_.
+
 Then, you can install or upgrade FRETBursts with::
 
     conda install fretbursts -c conda-forge
@@ -32,6 +31,35 @@ and how to launch it please see:
 * `Jupyter/IPython Notebook Quick Start Guide <http://jupyter-notebook-beginner-guide.readthedocs.org/en/latest/>`__
 
 See also the FRETBursts documentation section: :ref:`running_fretbursts`.
+
+Install from yaml file
+----------------------
+
+With anaconda, you can manage different environments, allowing specific versions to be installed ensuring compatibility.
+Which packages you need will depend on your use case.
+
+Environments can be build from yaml files with::
+
+    conda env create -f <envfile.yml>
+
+And activate with::
+
+    conda activate <envname>
+
+Below are environment files that we have *_**verified to work**
+#. Minimal environment: :download:`frbmin.yml<downloads/frbmin.yml>` which will create an environment named `frbmin` which contains just the essential packages for running the notebooks
+#. Complete environment :download:`frbcmpt.yml<downloads/frbcmplt.yml>` which will create an environment named `frbcmplt` which also includes cython, testing packages and numba, which are not necesary for running FRETBursts, but can come in helpful in other circumstances
+
+For packages build off of FRETBursts, check their respective documentation for similar yaml files.
+
+To create an environemnt from a downloaded yml file (like those above) run the command in your terminal::
+
+    conda env create <filenam.yml>
+
+Then simply activate the environment with::
+
+    conda activate <envname>
+
 
 Alternative methods: using PIP
 ------------------------------
@@ -57,13 +85,13 @@ containing the fretbursts (do it only once after installing Anaconda)::
 
     conda config --append channels conda-forge
 
-Then create a new conda environment with python 3.7 and FRETbursts::
+Then create a new conda environment with python 3.10 and FRETbursts::
 
-    conda create -n py37-fb python=3.7 fretbursts
-    conda activate py37-fb
+    conda create -n py310-fb python=3.10 fretbursts
+    conda activate py310-fb
     conda install pyqt   # optional
     pip install pybroom  # optional
-    python -m ipykernel install --user --name py37-fb --display-name "Python 3.7 (FB)"
+    python -m ipykernel install --user --name py310-fb --display-name "Python 3.10 (FB)"
 
 The last command installs the
 `jupyter kernel <https://ipython.readthedocs.io/en/latest/install/kernel_install.html>`__

@@ -6,8 +6,9 @@ Getting started for the absolute python beginner
 Before running FRETBursts you need to install a python distribution that
 includes the Jupyter/IPython Notebook application.
 
-You can find a quick guide for installing the software and running your first
-notebook here:
+We recomend using Anaconda, which you can find instructions for downloading and installing here: `Anaconda installation instructions <https://docs.anaconda.com/free/anaconda/install/index.html>`_.
+
+You can find a guide for jupyter notebooks here:
 
 - |jupyter_quick_guide|
 
@@ -30,6 +31,19 @@ type the following commands in a terminal
 The installation should take a few seconds.
 If you notice any error please report it by opening a new issue on the
 `FRETBursts GitHub Issues <https://github.com/OpenSMFS/FRETBursts/issues>`_.
+
+Alternatively create an environment from one of our yaml files where we have verified compatibility of all versions of the software: :downlaod:`frbmin.yml <downloads/frbmin.yml>`
+
+First download `frbmin.yml`
+
+Then run the following in your terminal::
+
+    conda env create -f frbmin.yml
+    conda activate frbmin
+
+.. note::
+    You may need to replace frbmin.yml with the path to the file you downloaded.
+    :ref:`instalation` provides other yaml files for more complete environments.
 
 Running FRETBursts tutorial notebook
 ------------------------------------
