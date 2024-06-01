@@ -80,7 +80,7 @@ __all__matplotlib = [
 __all_local_names = [
         # Local modules
         "loader", "select_bursts", "bl", "bg", "bpl", "bext", "bg_cache",
-        "hdf5", "fretmath", "mfit", "citation", "git",
+        "hdf5", "fretmath", "mfit", "citation",
 
         # Classes, functions, variables
         "Data", "Sel", "Ph_sel",
@@ -159,7 +159,6 @@ if has_matplotlib and has_pandas and has_lmfit:
             )
 
 from .utils.misc import download_file
-from .utils import git
 
 
 def init_notebook(fs=13, seaborn_style='darkgrid',
