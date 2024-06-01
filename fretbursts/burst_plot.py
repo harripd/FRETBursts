@@ -2129,14 +2129,15 @@ def scatter_fret_width(d, i=0, ax=None):
 
 
 @_ax_intercept
-def scatter_da(d, i=0, alpha=0.3, ax=None):
+def scatter_da(d, i=0, alpha=0.3, ax=None, **kwargs):
     """Scatterplot of donor vs acceptor photons (nd, vs na) in each burst."""
-    nd = np.concatenate(d.nd) if i is None else d.nd[i]
-    na = np.concatenate(d.na) if i is None else d.na[i]
-    ax.plot(nd, na, 'o', mew=0, ms=3, alpha=alpha, color='blue')
+    plot_kwargs = _normalize_kwargs(dict(lw=0, s=17, alpha=alpha, c='blue'), kind='scatter')
+    plot_kwargs.update(_normalize_kwargs(kwargs, kind='scatter'))
+    scat = scatter_burst_data(d, 'nd', 'na', ax=ax, **plot_kwargs)
     ax.set_xlabel('# donor ph.'); ax.set_ylabel('# acceptor ph.')
     ax.set_xlim(-5, 200)
     ax.set_ylim(-5, 120)
+    return scat
 
 
 @_ax_intercept
