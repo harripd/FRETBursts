@@ -5,7 +5,7 @@
 #               Antonino Ingargiola <tritemio@gmail.com>
 #
 from sys import version_info as python_version
-if python_verion.major > 3 or python_version.minor > 7:
+if python_version.major > 3 or python_version.minor > 7:
     from importlib.metadata import version, PackageNotFoundError
 else:
     from importlib_metadata import version, PackageNotFoundError
