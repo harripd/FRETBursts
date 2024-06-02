@@ -3,7 +3,7 @@ FRETBursts Release Notes
 
 .. module:: fretbursts
 
-Version 0.8.2 (Jun. 2024)
+Version 0.8.3 (Jun. 2024)
 ------------------------
 
 - Removed support for Python 3.6, as Python 3.7 now in end of life and 3.6 not supported
