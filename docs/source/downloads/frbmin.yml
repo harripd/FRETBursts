@@ -16,5 +16,5 @@ dependencies:
   - pyqt=5.15.9
   - lmfit=1.2.2
   - phconvert=0.9.1
-  - fretbursts=0.8.1
+  - fretbursts=0.8.2
 
