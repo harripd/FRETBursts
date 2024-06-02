@@ -57,6 +57,5 @@ fretbursts = ["phtools/*.pyx", ]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
-write_to = "fretbursts/_version.py"
 
 [tool.pytest.ini_options]
