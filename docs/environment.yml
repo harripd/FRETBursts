@@ -6,15 +6,15 @@ channels:
 
 dependencies:
 - python=3.12
-- pip
-- setuptools
-- matplotlib
-- cython
-- pytables
-- lmfit
-- mock
-- pandas
-- phconvert
-- seaborn
+- pip=24.0
+- setuptools=70.0.0
+- matplotlib=3.8.4
+- cython=3.0.10
+- pytables=3.9.2
+- lmfit=1.2.2
+- mock=5.1.0
+- pandas=2.2.2
+- phconvert=0.9.1
+- seaborn=0.13.2
 - pip:
   - sphinx_bootstrap_theme
