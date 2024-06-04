@@ -15,6 +15,6 @@ dependencies:
 - mock=5.1.0
 - pandas=2.2.2
 - phconvert=0.9.1
-- seaborn=0.13.2
 - pip:
+  - seaborn
   - sphinx_bootstrap_theme
