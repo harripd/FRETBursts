@@ -1,9 +1,26 @@
+version: 2
+
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "miniconda3-4.7"
+ 
+python:
+  install:
+    - requirements: docs/rtd_requirements.txt
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs
+
 conda:
     file: docs/environment.yml
 
-python:
-   version: 3.8
-   setup_py_install: true
+
+
+sphinx:
+  builder: html
+  configuration: docs/source/conf.py
 
 formats:
     - epub
