@@ -5,16 +5,17 @@ channels:
 - default
 
 dependencies:
-- python=3.10
+- python=3.12
 - pip
 - setuptools
+- numpy
 - matplotlib
 - cython
 - pytables
 - lmfit
+- mock
 - pandas
 - phconvert
-- mock
 - sphinx
 - pip:
   - seaborn
