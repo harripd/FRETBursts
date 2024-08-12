@@ -230,7 +230,7 @@ def _compute_acceptor_emission_mask(data, ich, ondisk):
         mask = (selection_mask(det_ich, donor) +
                 selection_mask(det_ich, accept))
         data.detectors[ich] = det_ich[mask]
-        data.ph_times_m[ich] = det_ich[mask]
+        data.ph_times_m[ich] = data.ph_times_m[ich][:][mask]
         if 'nanotimes' in data:
             data.nanotimes[ich] = data.nanotimes[ich][:][mask]
 
