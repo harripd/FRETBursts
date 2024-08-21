@@ -246,6 +246,8 @@ def _compute_acceptor_emission_mask(data, ich, ondisk):
         _append_data_ch(data, 'A_em',
                         selection_mask(det_ich, accept))
 
+import re
+mask_rgx = re.compile(r'markers([1-0]\d*)')
 
 def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     data.add(nch=nch)
@@ -259,12 +261,13 @@ def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     # Load photon_data group and measurement_specs (if present)
     ph_data = h5data._f_get_child(ph_data_name)
     meas_type, meas_specs = _get_measurement_specs(ph_data, h5data.setup)
+    det_specs = dict() if meas_specs is None else meas_specs.detectors_specs
     # Set some `data` flags
     data.add(meas_type=meas_type)
     data.add(ALEX='ALEX' in meas_type)  # True for usALEX, nsALEX and PAX
-    data.add(alternated=data.ALEX or 'PAX' in data.meas_type)
+    data.add(alternated='alex_excitation_period1' in ph_data)
     data.add(lifetime='nanotimes' in ph_data)
-    data.add(polarization='2pol' in meas_type)
+    data.add(polarization='polarization_ch1' in det_specs and 'polarization_ch2' in det_specs)
     data.add(spectral='smFRET-1color' not in meas_type)
 
     # Load photon_data arrays
@@ -275,7 +278,6 @@ def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
         _load_nanotimes_specs(data, ph_data)
 
     # Unless 1-color, load donor and acceptor info
-    det_specs = meas_specs.detectors_specs
     if data.spectral:
         try:
             donor = np.atleast_1d(det_specs.spectral_ch1.read())
@@ -297,6 +299,8 @@ def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     if data.spectral and not data.alternated:
         # No alternation, we can compute the emission masks right away
         _compute_acceptor_emission_mask(data, ich, ondisk=ondisk)
+    
+    
 
     if loadspecs and data.spectral and data.alternated and not data.lifetime:
         # load alternation metadata for usALEX or PAX
@@ -346,12 +350,12 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_
         d = group_data([photon_hdf5(f) for f in filename])
         return d
     filename = str(filename)
-    assert os.path.isfile(filename), 'File not found.'
+    assert os.path.isfile(filename), FileNotFoundError(f'{filename} does not exist')
     version = phc.hdf5._check_version(filename)
     if version == u'0.2':
         return loader_legacy.hdf5(filename)
 
-    h5file = tables.open_file(filename)
+    h5file = tables.open_file(filename, 'r')
     try:
         # make sure the file is valid
         if validate and version.startswith(u'0.4'):
