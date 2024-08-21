@@ -361,7 +361,6 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_
         elif validate:
             phc.hdf5.assert_valid_photon_hdf5(h5file, require_setup=require_setup,
                                               strict_description=False)
-<<<<<<< HEAD
         # Create the data container
         h5data = h5file.root
         d = Data(fname=filename, data_file=h5data._v_file)

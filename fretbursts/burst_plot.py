@@ -1942,7 +1942,6 @@ def hist_burst_phrate(d, i=0, bins=(0, 1000, 20), pdf=True, weights=None,
             d.calc_max_rate(m=10)
         max_rate = np.concatenate(d.max_rate) if i is None else d.max_rate[i]
     
-<<<<<<< HEAD
     _hist_burst_taildist(max_rate * 1e-3, bins, pdf, ax, weights=weights,
                          color=color, plot_style=plot_style, vline=vline)
     ax.set_xlabel('Peak rate (kcps)')
