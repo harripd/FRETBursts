@@ -13,6 +13,7 @@ import pytest
 import numpy as np
 
 
+<<<<<<< HEAD:tests/test_burst_plot.py
 import matplotlib
 matplotlib.use('Agg')  # but if matplotlib is installed, use Agg
 import matplotlib.pyplot as plt
@@ -22,6 +23,13 @@ import matplotlib.pyplot as plt
 #     has_numba = False
 # else:
 #     has_numba = True
+
+try:
+    import numba
+except ImportError:
+    has_numba = False
+else:
+    has_numba = True
 
 
 import fretbursts.background as bg

@@ -561,10 +561,18 @@ def _get_bg_distrib_erlang(d, ich=None, m=10, ph_sel=Ph_sel('all'),
     if ich is None:
         ich = tuple(range(d.nch))
     assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
-    # fix negative periods so wrapping occurs coorectly
+    # fix negative periods so wrapping occurs correctly
+    parr = np.array(period)
+    for i, p in enumerate(parr):
+        if p < 0:
+            parr[i] = len(d.Lim[ich]) - p + 1
+    period = tuple(parr)
     # Compute the BG distribution
-    rate_ch_kcps = np.concatenate([d.bg[ph_sel][i][p[0]:p[1]] for i, p in zip(ich, period)]).mean() / 1e3
-    bg_dist = erlang(a=m, scale=1.0/rate_ch_kcps)
+    bg_ph = d.bg[ph_sel][ich]
+
+    # Compute the BG distribution
+    rate_ch_kcps = bg_ph[period[0]:period[1]+1].mean()/1e3  # bg rate in kcps
+    bg_dist = erlang(a=m, scale=1./rate_ch_kcps)
     return bg_dist
 
 
@@ -668,8 +676,23 @@ def calc_mdelays_hist(d, ich=0, m=10, period=(0, -1), bins_s=(0, 10, 0.02),
         period = tuple(period for _ in ich)
     periods = tuple(slice(d.Lim[i][p[0]][0], d.Lim[i][p[1]][1] + 1) for i, p in zip(ich, period))
     bins = np.arange(*bins_s)
-    ph, phb = zip(*(_get_mdelay_channel(d, ph_sel, i, prds, bursts) for i, prds, in zip(ich, periods)))
-    ph_mdelays = np.concatenate([np.diff(ph_[::m])*d.clk_p*1e3 for ph_ in ph])       # millisec
+
+    if ph_sel == Ph_sel('all'):
+        ph = d.ph_times_m[ich][periods]
+        if bursts:
+            phb = ph[d.ph_in_bursts_mask_ich(ich=ich)[periods]]
+    elif ph_sel == Ph_sel(Dex='Dem'):
+        donor_ph_period = ~d.A_em[ich][periods]
+        ph = d.ph_times_m[ich][periods][donor_ph_period]
+        if bursts:
+            phb = ph[d.ph_in_bursts_mask(ich=ich)[periods][donor_ph_period]]
+    elif ph_sel == Ph_sel(Dex='Aem'):
+        accept_ph_period = d.A_em[ich][periods]
+        ph = d.ph_times_m[ich][periods][accept_ph_period]
+        if bursts:
+            phb = ph[d.ph_in_bursts_mask(ich=ich)[periods][accept_ph_period]]
+
+    ph_mdelays = np.diff(ph[::m])*d.clk_p*1e3        # millisec
     if bursts:
         phb_mdelays = np.concatenate([np.diff(phb_[::m])*d.clk_p*1e3 for phb_ in phb])  # millisec
         phb_mdelays = phb_mdelays[phb_mdelays < 5]

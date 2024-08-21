@@ -487,7 +487,6 @@ def timetrace(d, i=0, binwidth=1e-3, bins=None, tmin=0, tmax=200,
               show_rate_th=True, F=None, rate_th_style={'label': None},
               show_aa=True, legend=False, set_ax_limits=True,
               burst_color='#BBBBBB', plot_style=None,
-              #dd_plot_style={}, ad_plot_style={}, aa_plot_style={}
               ax=None):
     """Plot the timetraces (histogram) of photon timestamps.
 
@@ -629,7 +628,6 @@ def ratetrace(d, i=0, m=None, max_num_ph=1e6, tmin=0, tmax=200,
               bursts=False, burst_picker=True, scroll=False,
               show_rate_th=True, F=None, rate_th_style={'label': None},
               show_aa=True, legend=False, set_ax_limits=True,
-              #dd_plot_style={}, ad_plot_style={}, aa_plot_style={}
               burst_color='#BBBBBB', ax=None):
     """Plot the rate timetraces of photon timestamps.
 
@@ -724,7 +722,6 @@ def timetrace_fret(d, i=0, gamma=1., ax=None, **kwargs):
     ax.set_ylabel('E')
     _gui_timetrace_burst_sel(d, ax.figure, ax)
 
-# plot per channel always
 @_ax_intercept
 def timetrace_fret_scatter(d, i=0, gamma=1., ax=None, **kwargs):
     """Timetrace of burst FRET vs time. Uses `scatter` (slow)."""
@@ -1502,7 +1499,6 @@ def get_ES_range():
     return sel
 
 
-
 @_ax_intercept
 def hist_interphoton_single(d, i=0, binwidth=1e-4, tmax=None, bins=None,
                             ph_sel=Ph_sel('all'), period=None,
@@ -1818,7 +1814,14 @@ def hist_mdelays(d, i=0, m=10, bins_s=(0, 10, 0.02), period=0,
         #ax.clear()
         for _ind in range(len(ax.lines)): ax.lines.pop()
 
-    results = bext.calc_mdelays_hist(d, ich=i, m=m, period=period, bins_s=bins_s,
+    if i is None:
+        results = np.concatenate([bext.calc_mdelays_hist(d, ich=j, m=m, period=period, 
+                                                          bins_s=bins_s,ph_sel=ph_sel, 
+                                                          bursts=True, bg_fit=bg_fit, 
+                                                          bg_F=bg_F) 
+                                  for j in range(d.nch)])
+    else:
+        results = bext.calc_mdelays_hist(d, ich=i, m=m, period=period, bins_s=bins_s,
                                          ph_sel=ph_sel, bursts=True, bg_fit=bg_fit, bg_F=bg_F)
     bin_x, histog_y, bg_dist = results[:3]
     rate_ch_kcps = 1./bg_dist.kwds['scale']  # extract the rate
@@ -1939,6 +1942,7 @@ def hist_burst_phrate(d, i=0, bins=(0, 1000, 20), pdf=True, weights=None,
             d.calc_max_rate(m=10)
         max_rate = np.concatenate(d.max_rate) if i is None else d.max_rate[i]
     
+<<<<<<< HEAD
     _hist_burst_taildist(max_rate * 1e-3, bins, pdf, ax, weights=weights,
                          color=color, plot_style=plot_style, vline=vline)
     ax.set_xlabel('Peak rate (kcps)')
@@ -2062,8 +2066,6 @@ def scatter_width_size(d, i=0, ax=None):
 
 
 @_ax_intercept
-def scatter_rate_da(d, i=0, ax=None):
-    """Scatter of nd rate vs na rate (rates for each burst)."""
     bw = np.concatenate([burst.width for burst in d.mburst]) if i is None else d.mburst[i].width
     nd = np.concatenate(d.nd) if i is None else d.nd[i]
     na = np.concatenate(d.na) if i is None else d.na[i]
