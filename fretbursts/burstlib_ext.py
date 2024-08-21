@@ -48,7 +48,6 @@ Finally a few functions deal with burst timestamps:
 
 """
 
-from itertools import chain, islice
 import numpy as np
 from scipy.stats import erlang
 from scipy.optimize import leastsq
@@ -58,7 +57,7 @@ import tables
 
 from .ph_sel import Ph_sel
 from . import background as bg
-from .utils.misc import pprint, HistData, _is_list_of_arrays, dict_equal
+from .utils.misc import pprint, HistData, _is_list_of_arrays, dict_equal, s_equal
 
 from . import burstlib
 from . import select_bursts
@@ -67,7 +66,7 @@ from . import mfit
 
 from .burstlib import isarray, Data
 from .phtools.burstsearch import Bursts
-
+from itertools import chain, islice, product
 
 def moving_window_startstop(start, stop, step, window=None):
     """Computes list of (start, stop) values defining a moving-window.
@@ -317,7 +316,7 @@ def calc_bg_brute(dx, min_ph_delay_list=None, return_all=False,
     for ph_sel in dx.ph_streams:
         # Compute BG and error for all ch, periods and thresholds
         # Shape: (nch, nperiods, len(thresholds))
-        BG_data[ph_sel], BG_data_e[ph_sel] = bg.fit_varying_min_delta_ph(
+        BG_data[ph_sel.__str__()], BG_data_e[ph_sel] = bg.fit_varying_min_delta_ph(
             dx, min_ph_delay_list, bg_fit_fun=bg.exp_fit, ph_sel=ph_sel,
             error_metrics=error_metrics)
 
@@ -382,6 +381,9 @@ def burst_data(dx, include_bg=False, include_ph_index=False,
         if not include_bg:
             bursts_ich = {k: v for k, v in bursts_ich.items()
                           if not k.startswith('bg')}
+        n_ph = bursts_ich.pop('n_ph')
+        for i, sel in enumerate(dx.ph_streams):
+            bursts_ich['n_'+sel.short_name] = n_ph[i,:]
         return pd.DataFrame.from_dict(bursts_ich)
 
     if skip_ch is None:
@@ -525,8 +527,8 @@ def bursts_fitter(dx, burst_data='E', save_fitter=True,
     Returns:
         The `mfit.MultiFitter` object with the specified burst-size weights.
     """
-    assert burst_data in dx
-    fitter = mfit.MultiFitter(dx[burst_data], skip_ch=skip_ch)
+    assert hasattr(dx,burst_data)
+    fitter = mfit.MultiFitter(getattr(dx,burst_data), skip_ch=skip_ch)
     if weights is None or _is_list_of_arrays(weights):
         # If no weights or precomputed weights
         fitter.weights = weights
@@ -558,19 +560,16 @@ def _get_bg_distrib_erlang(d, ich=None, m=10, ph_sel=Ph_sel('all'),
                            period=(0, -1)):
     """Return a frozen (scipy) erlang distrib. with rate equal to the bg rate.
     """
-    if ich is None:
-        ich = tuple(range(d.nch))
-    assert ph_sel in [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
-    # fix negative periods so wrapping occurs correctly
-    parr = np.array(period)
-    for i, p in enumerate(parr):
-        if p < 0:
-            parr[i] = len(d.Lim[ich]) - p + 1
-    period = tuple(parr)
-    # Compute the BG distribution
-    bg_ph = d.bg[ph_sel][ich]
+    assert ph_sel in [Ph_sel('all'), Ph_sel('DexDem'), Ph_sel('DexAem')]
 
     # Compute the BG distribution
+    if ph_sel == Ph_sel('all'):
+        bg_ph = d.bg_from(Ph_sel('DexDem'))[ich] + d.bg[Ph_sel('DexAem')][ich]
+    elif ph_sel == Ph_sel('DexDem'):
+        bg_ph = d.bg_from(Ph_sel('DexDem'))[ich]
+    elif ph_sel == Ph_sel('DexAem'):
+        bg_ph = d.bg_from(Ph_sel['DexAem'])[ich]
+
     rate_ch_kcps = bg_ph[period[0]:period[1]+1].mean()/1e3  # bg rate in kcps
     bg_dist = erlang(a=m, scale=1./rate_ch_kcps)
     return bg_dist
@@ -824,7 +823,7 @@ def join_data(d_list, gap=0):
         if name in new_d:
             empty = Bursts.empty() if name == 'mburst' else np.array([])
             new_d.add(**{name: [empty]*nch})
-            concatenate = Bursts.merge if name == 'mburst' else np.concatenate
+            concatenate = Bursts.merge if name == 'mburst' else np.hstack
 
             for ich in range(nch):
                 new_size = sum((d.mburst[ich].num_bursts for d in d_list))
@@ -832,8 +831,9 @@ def join_data(d_list, gap=0):
                     continue  # -> No bursts in this ch
 
                 value = concatenate([d[name][ich] for d in d_list])
+                vsize = value.shape[-1] if isinstance(value, np.ndarray) else value.size
                 new_d[name][ich] = value
-                assert new_d[name][ich].size == new_size
+                assert vsize == new_size
 
     # Set the background fields by concatenation along axis = 0
     new_nperiods = np.sum([d.nperiods for d in d_list], axis=0)
@@ -846,7 +846,7 @@ def join_data(d_list, gap=0):
                 assert new_d[name][ich].shape[0] == new_nperiods[ich]
     if 'bg' in new_d:
         new_d.add(bg={})
-        for sel in d.bg:
+        for sel in d_list[-1].bg:
             new_d.bg[sel] = []
             for ich in range(nch):
                 value = np.concatenate([d.bg[sel][ich] for d in d_list])
@@ -917,52 +917,114 @@ def group_data(d_list):
         Data object of inputs grouped into new multi-spot measurment.
 
     """
-    if hasattr(d_list[0], 'bg_time_s'):
-        if np.any([d.bg_time_s != d_list[0].bg_time_s for d in d_list]):
-            raise RuntimeError("Inconsistent background estimation")
-    new_d = Data(**dict(d_list[0]))
-    new_d.add(nch = sum([d.nch for d in d_list]))
-    new_d.add(name = 'Grouped data starting with ' + d_list[0].name)
-    new_d.add(fname = [d.fname for d in d_list])
-    for field in ('_leakage', '_dir_ex', '_gamma', '_beta', 'clk_p'):
-        if not np.all([np.allclose(d[field], new_d[field])  for d in d_list]):
-            raise ValueError(f"Different {field} corrections, ensure data sets are technical repeats")
+    if np.any([not hasattr(d0, field) for field, d0 in product(chain.from_iterable((f for f, _ in d) for d in d_list), d_list)]):
+        raise RuntimeError('Inconsistent field, objects either not technical repeats or analyzed differently')
+    new_d = Data()
+    new_d.nch = sum([d.nch for d in d_list])
+    if np.all([hasattr(d, '_stream_map') for d in d_list]):
+        new_d._stream_map = list(chain.from_iterable(d._stream_map for d in d_list))
+        try:
+            new_d.ph_streams_dict
+        except NotImplementedError:
+            raise RuntimeError("Cannot concatenate inconsistent stream maps")
+    elif np.any([hasattr(d, '_stream_map') for d in d_list]):
+        raise RuntimeError('Inconsistent values for stream_map, probably mixing alternation applied an not applied')
     if hasattr(d_list[0], 'nanotimes_params'):
-        if not dict_equal(*[d.nanotimes_params[0] for d in d_list]):
-            raise RuntimeError("Different nanotime params, cannot group non-technical repeats")
-    if hasattr(d_list[0], 'det_donor_accept'):
-        new_d.add(det_donor_accept=[l for l in chain.from_iterable(d.det_donor_accept for d in d_list)])
-    # Check that burst metadata is also consistent, so analysis, if done conducted equally
-    meta_data = dict()
-    for field in chain(Data.ph_fields, Data.burst_fields, Data.bg_fields, Data.burst_metadata, ('ph_times_t','det_t')):
-        if hasattr(d_list[0], field):
-            if np.any([not hasattr(d, field) for d in d_list[1:]]):
-                raise RuntimeError(f"Inconsistent analysis of {field}")
-            if isinstance(d_list[0][field], np.ndarray):
-                meta_data[field] = np.concatenate([d[field] for d in d_list])
-            elif isinstance(d_list[0][field], list):
-                meta_data[field] = [val for val in chain.from_iterable(d[field] for d in d_list)]
-            elif isinstance(d_list[0][field], dict):
-                if np.any([d[field].keys() != d_list[0][field].keys() for d in d_list[1:]]):
-                    raise RuntimeError(f"Inconsistent analysis for {field}")
-                field_dict = dict()
-                for key in d_list[0][field].keys():
-                    field_dict[key] = [val for val in chain.from_iterable(d[field][key] for d in d_list)]
-                meta_data[field] = field_dict
-            elif np.any([d[field] != d_list[0][field] for d in d_list[1:]]):
-                raise RuntimeError(f"Inconsistent analysis for {field}")
-    new_d.add(**meta_data)                
-    setup = dict()
+        nanotimes_params = list(chain.from_iterable(d.nanotimes_params for d in d_list))
+        if not dict_equal(*nanotimes_params):
+            raise RuntimeError("Inconsistent nanotimes_params")
+        new_d.nanotimes_params = nanotimes_params
+    if not s_equal([d.s for d in d_list]):
+        raise RuntimeError('Inconsistent burst selections, cannot group')
+    new_d.s = d_list[0].s
+    new_d._name = 'Joined files:\n' + '\n'.join([d.name for d in d_list])
+    new_d.data_file = [d.data_file for d in d_list]
     i = 0
+    group_slice, group_names = list(), list()
     for d in d_list:
-        setup[d.name] = (d.setup, slice(i, i+d.nch))
-    new_d.add(setup = setup)
+        group_slice.append(slice(i,i+d.nch))
+        group_names.append(d.name)
+        i += d.nch
+    new_d.group_slice = group_slice
+    new_d.group_names =group_names
+    for field, _ in d_list[0]:
+        # skip the internal stream mappings
+        if field in Data.stream_mappings:
+            continue
+        # skip values that need to be (or have been) recalculated
+        if field in ('nch', '_time_min', '_time_max', '_name', 'data_file', 
+                     'nanotimes_params', 's', 'group_names', 'group_slice'):
+            continue
+        value = d_list[0][field]
+        if isinstance(value, list):
+            new_d[field] = list(chain.from_iterable(d[field] for d in d_list))
+        elif isinstance(value, np.ndarray) and value.ndim > 0:
+            print(field, value)
+            new_d[field] = np.concatenate(list(d[field] for d in d_list))
+        elif isinstance(value, dict):
+            if np.all([isinstance(v, list) for v in value.values()]):
+                concat = dict()
+                for key, val in value.items():
+                    concat[key] = list(chain.from_iterable(d[field][key] for d in d_list))
+                new_d[field] = concat
+            else:
+                new_d[field] = {d.name:d[field] for d in d_list}
+        elif isinstance(value, str):
+            new_d[field] = [d[field] for d in d_list]
+        elif np.any([d[field] != value for d in d_list]):
+            raise RuntimeError(f'Inconsistent {field} values')
+        else:
+            new_d[field] = d_list[0][field]
     return new_d
+    
+    # new_d.nch = sum([d.nch for d in d_list])
+    # new_d.name = 'Joined data of\n' + '\n'.join(d.name for d in d_list)
+    # # check and concatenate fields defining spectral maps, (these are ones defined before applying alternation period)
+    # for d in d_list[1:]:
+    #     for field in ('det_spectral', 'det_p_s_pol', 'det_split'):
+    #         if hasattr(d, field) and hasattr(d_list[0], field):
+    #             new_d[field] += getattr(d, field)
+    #         elif hasattr(d, field) != hasattr(d_list[0], field):
+    #             raise RuntimeError(f"Inconsistent {field} assignment in files attempting to combine")
+    # # rebuilding stream maps (skipped if before alternation applied)
+    # new_d.delete('_ph_streams_dict', '_ph_cache', '_ph_cache_ich',  warning=False)
+    # if hasattr(new_d, 'stream_map'):
+    #     new_d._stream_map = list(chain.from_iterable(d._stream_map for d in d_list))
+    #     try:
+    #         _ = new_d.ph_streams_dict
+    #     except NotImplementedError:
+    #         raise RuntimeError("Cannot concatenate inconsistent stream maps")
+    # # checking burst corrections are all applied equally, so joined E/S values consistent
+    # for field in ('leakage', 'dir_ex', 'gamma', 'beta'):
+    #     if np.any([d[field] != new_d[field] for d in d_list]):
+    #         raise ValueError(f"Different {field} corrections, ensure data sets are technical repeats")
+    # # Check that burst metadata is also consistent, so analysis, if done conducted equally
+    
+    # # join large data fields
+    # for field in chain(Data.ph_fields, Data.burst_fields, Data.channel_stream_mappings[2:], Data.burst_metadata, ('_ph_data_sizes',)):
+    #     if hasattr(d, field) and hasattr(d_list[0], field):
+    #         if np.any([not hasattr(d, field) for d in d_list[1:]]):
+    #             raise RuntimeError(f"Inconsistent analysis of {field}")
+    #         value = getattr(d_list[0], field)
+    #         if isinstance(value, list):
+    #             new_d[field] = [val for val in chain.from_iterable(d[field] for d in d_list)]
+    #         elif isinstance(value, dict):
+    #             if np.any([d[field].keys() != value.keys() for d in d_list[1:]]):
+    #                 raise RuntimeError(f"Inconsistent analysis of keys in {field}")
+    #             new_d[field] = {key:[val for val in chain.from_iterable(d[field][key] for d in d_list)] for key in value.keys()}
+    #         elif isinstance(value, np.ndarray):
+    #             print(field, np.concatenate([d[field] for d in d_list]))
+    #             new_d[field] = np.concatenate([d[field] for d in d_list])
+    #         elif np.any([d[field] != value for d in d_list[1:]]):
+    #             raise RuntimeError(f'Inconsistent analysis of {field}')
+    #     elif hasattr(d, field) != hasattr(d_list[0], field):
+    #         raise RuntimeError(f"Inconsistent analysis of {field}")
+    
 
 
 def burst_search_and_gate(dx, F=6, m=10, min_rate_cps=None, c=-1,
-                          ph_sel1=Ph_sel(Dex='DAem'),
-                          ph_sel2=Ph_sel(Aex='Aem'), compact=False, mute=False):
+                          ph_sel1=Ph_sel('DexDAem'),
+                          ph_sel2=Ph_sel('AexAem'), compact=False, mute=False):
     """Return a Data object containing bursts obtained by and-gate burst-search.
 
     The and-gate burst search is a composition of 2 burst searches performed
@@ -1117,10 +1179,8 @@ def asymmetry(dx, ich=0, func=np.mean, dropnan=True):
     Returns:
         An arrays of photon timestamps (one array per burst).
     """
-    if ich is None:
-        burst_asym = [asymmetry(dx, ich=i, func=func, dropnan=dropnan) for i in range(dx.nch)]
-    stats_d = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel(Dex='Dem'))
-    stats_a = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel(Dex='Aem'))
+    stats_d = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel('DexDem'))
+    stats_a = ph_burst_stats(dx, ich=ich, func=func, ph_sel=Ph_sel('DexAem'))
     burst_asym = (stats_d - stats_a) * dx.clk_p * 1e3
     if dropnan:
         burst_asym = burst_asym[~np.isnan(burst_asym)]

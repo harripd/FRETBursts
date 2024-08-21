@@ -14,7 +14,6 @@ For derivation see notebook: "Derivation of FRET and S correction formulas.ipynb
 
 """
 
-
 import numpy as np
 
 ##

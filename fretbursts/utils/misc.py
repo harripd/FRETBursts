@@ -10,6 +10,8 @@ Misc utility functions
 import os
 import sys
 import numpy as np
+from itertools import chain, product
+from collections.abc import Iterable
 
 
 def selection_mask(arr, values):
@@ -41,7 +43,7 @@ def _is_list_of_arrays(obj):
     return isinstance(obj, list) and np.all([isinstance(v, np.ndarray)
                                              for v in obj])
 
-class HistData(object):
+class HistData:
     """Stores histogram counts and bins and provides derived fields.
 
     Attributes:
@@ -149,6 +151,29 @@ def download_file(url, save_dir='./'):
     mkdir_p(save_dir)
     urlretrieve(url, path, _report)
 
+def _mask_multi(arr, eq):
+    if isinstance(eq, Iterable):
+        mask = np.zeros(arr.shape, dtype=bool)
+        for e in eq:
+            mask += arr == e
+    else:
+        mask = arr == eq
+    return mask
+
+def union_multi(*args):
+    if len(args) == 1:
+        return args[0]
+    union = np.union1d(args[0], args[1])
+    for arr in args[2:]:
+        union = np.union1d(union, arr)
+    return union
+
+def intersect_multi(*args):
+    intersect = args[0]
+    for arg in args[1:]:
+        intersect = np.intersect1d(intersect, arg)
+    return intersect
+
 def _large_equal(val0, val1):
     if type(val0) != type(val1):
         return False
@@ -173,8 +198,8 @@ def dict_equal(*dicts):
         for key, val0 in dicts[0].items():
             for dct in dicts[1:]:
                 if not _large_equal(val0, dct[key]):
-                    comp = False
-                    break 
-            if not comp:
-                break
+                    return False
     return comp
+
+def s_equal(*lsts):
+    return np.all([f in l0 for f, l0 in product(chain.from_iterable(l for l in lsts), lsts)])

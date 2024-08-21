@@ -2,6 +2,7 @@ FRETBursts
 ==========
 
 [![DOI](https://zenodo.org/badge/5991/tritemio/FRETBursts.svg)](https://zenodo.org/badge/latestdoi/5991/tritemio/FRETBursts)
+<<<<<<< HEAD
 [![Tests](https://github.com/OpenSMFS/FRETBursts/actions/workflows/tests.yml/badge.svg)](https://github.com/OpenSMFS/FRETBursts/actions)
 [![Documentation Status](https://readthedocs.org/projects/fretbursts/badge/?version=latest)](https://fretbursts.readthedocs.io/en/latest/?badge=latest)
 > *Quick links: [Reference documentation](http://fretbursts.readthedocs.org/), [FRETBursts tutorials](https://github.com/OpenSMFS/FRETBursts_notebooks#fretbursts-notebooks), [FRETBursts paper](http://dx.doi.org/10.1101/039198)*

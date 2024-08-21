@@ -10,6 +10,7 @@ Running the tests requires `py.test`.
 """
 
 from collections import namedtuple
+from itertools import chain, product, permutations
 import pytest
 from itertools import product
 import numpy as np
@@ -61,10 +62,14 @@ def load_dataset_1ch(process=True):
     return d
 
 def load_dataset_1ch_nsalex(process=True):
-    # fn = "dsdna_d7_d17_50_50_1.hdf5"
-    fn = 'HP3_TE150_SPC630.hdf5'
+    fn = "dsdna_d7_d17_50_50_1.hdf5"
     fname = DATASETS_DIR + fn
     d = loader.photon_hdf5(fname)
+    for i in range(d.nch):
+        mask = d.det_t[i] > 2 # mask only inlcudes real photons-- > 2 specific to this data
+        d.det_t[i] = d.det_t[i][mask]
+        d.ph_times_t[i] = d.ph_times_t[i][mask]
+        d.nanotimes_t[i] = d.nanotimes_t[i][mask]
     if process:
         _alex_process(d)
     return d
@@ -75,6 +80,7 @@ def load_dataset_8ch():
     d = loader.photon_hdf5(fname)
     d.calc_bg(bg.exp_fit, time_s=30, tail_min_us=300)
     d.burst_search(L=10, m=10, F=7)
+    print([n.shape for n in d.n_ph])
     return d
 
 def load_fake_pax():
@@ -140,6 +146,31 @@ def data_mch(request):
     return d
 
 
+
+
+def load_dataset_group():
+    d = load_dataset_1ch_nsalex()
+    d = bext.group_data([d for _ in range(8)])
+    return d
+
+@pytest.fixture(scope="module")
+def data_group(request):
+    d = load_dataset_group()
+    return d
+
+@pytest.fixture(scope="module", params=[
+                                    load_dataset_1ch,
+                                    load_dataset_8ch,
+                                    load_dataset_1ch_nsalex,
+                                    load_dataset_group,
+                                    ])
+def data(request):
+    load_func = request.param
+    d = load_func()
+    return d
+
+
+
 ##
 # List comparison functions
 #
@@ -163,16 +194,17 @@ def list_array_allclose(list1, list2):
 # Test functions
 #
 
-def test_bg_compatlayer_for_obsolete_attrs():
-    d = load_dataset_1ch(process=False)
-    attrs = ('bg_dd', 'bg_ad', 'bg_da', 'bg_aa',
-             'rate_m', 'rate_dd', 'rate_ad', 'rate_da', 'rate_aa')
-    for attr in attrs:
-        with pytest.raises(RuntimeError):
-            getattr(d, attr)
-    _alex_process(d)
-    for attr in attrs:
-        assert isinstance(getattr(d, attr), list)
+## These attributes are now depricated
+# def test_bg_compatlayer_for_obsolete_attrs():
+#     d = load_dataset_1ch(process=False)
+#     attrs = ('bg_dd', 'bg_ad', 'bg_da', 'bg_aa',
+#               'rate_m', 'rate_dd', 'rate_ad', 'rate_da', 'rate_aa')
+#     for attr in attrs:
+#         with pytest.raises(RuntimeError):
+#             getattr(d, attr)
+#     _alex_process(d)
+#     for attr in attrs:
+#         assert isinstance(getattr(d, attr), list)
 
 
 def test_ph_times_compact(data_1ch):
@@ -182,10 +214,10 @@ def test_ph_times_compact(data_1ch):
     ich = 0
     d = data_1ch
 
-    ph_d = d.get_ph_times(ph_sel=Ph_sel(Dex='DAem'))
-    ph_a = d.get_ph_times(ph_sel=Ph_sel(Aex='DAem'))
-    ph_dc = d.get_ph_times(ph_sel=Ph_sel(Dex='DAem'), compact=True)
-    ph_ac = d.get_ph_times(ph_sel=Ph_sel(Aex='DAem'), compact=True)
+    ph_d = d.get_ph_times(ph_sel=Ph_sel('DexDAem'))
+    ph_a = d.get_ph_times(ph_sel=Ph_sel('AexDAem'))
+    ph_dc = d.get_ph_times(ph_sel=Ph_sel('DexDAem'), compact=True)
+    ph_ac = d.get_ph_times(ph_sel=Ph_sel('AexDAem'), compact=True)
     # Test that the difference of ph and ph_compact is multiple of
     # the complementary excitation period duration
     Dex_void = bl._excitation_width(d._D_ON_multich[ich], d.alex_period)
@@ -193,9 +225,9 @@ def test_ph_times_compact(data_1ch):
     assert isinteger((ph_d - ph_dc) / Dex_void).all()
     assert isinteger((ph_a - ph_ac) / Aex_void).all()
     # Test that alternation histogram does not have "gaps" for ph_compact
-    bins = np.linspace(0, d.alex_period, num=101)
-    hist_dc, _ = np.histogram(ph_dc % d.alex_period, bins=bins)
-    hist_ac, _ = np.histogram(ph_ac % d.alex_period, bins=bins)
+    bins = np.linspace(0, d.alex_period[0], num=101)
+    hist_dc, _ = np.histogram(ph_dc % d.alex_period[0], bins=bins)
+    hist_ac, _ = np.histogram(ph_ac % d.alex_period[0], bins=bins)
     assert (hist_dc > 0).all()
     assert (hist_ac > 0).all()
 
@@ -228,10 +260,10 @@ def test_aex_dex_ratio(data_1ch):
     """
     d = data_1ch
     Dx, Ax = d.D_ON, d.A_ON
-    aex_fraction = d._aex_fraction
+    aex_fraction = d._aex_fraction[0]
     a2 = (Ax[1] - Ax[0]) / (Ax[1] - Ax[0] + Dx[1] - Dx[0])
     assert aex_fraction == a2
-    aex_dex_ratio = d._aex_dex_ratio
+    aex_dex_ratio = d._aex_dex_ratio[0]
     r2 = (Ax[1] - Ax[0]) / (Dx[1] - Dx[0])
     assert aex_dex_ratio == r2
     assert (aex_fraction / (1 - aex_fraction)) == aex_dex_ratio
@@ -240,29 +272,29 @@ def test_aex_dex_ratio(data_1ch):
 
 def test_burst_size_pax():
     d = load_fake_pax()
-    aex_dex_ratio = d._aex_dex_ratio
+    aex_dex_ratio = d._aex_dex_ratio[0]
     nd, na = d.nd[0], d.na[0]
     nda, naa = d.nda[0], d.naa[0]
     naa_aexonly = naa - d.nar[0] * aex_dex_ratio
 
     # Test burst size during Dex
-    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel(Dex='DAem'))
+    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('DexDAem'))
     b2 = d.burst_sizes_ich(add_naa=False)
     b3 = nd + na
     assert (b1 == b2).all()
     assert (b1 == b3).all()
 
     # Test burst size during Dex + AexAem
-    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel(Dex='DAem', Aex='Aem'),
-                               naa_aexonly=True)
+    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('DexDAem_AexAem'),
+                                naa_aexonly=True)
     b2 = d.burst_sizes_ich(add_naa=True)
     b3 = nd + na + naa_aexonly
     assert (b1 == b2).all()
     assert (b1 == b3).all()
 
     # Test burst size during AexAem
-    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel(Dex=None, Aex='Aem'),
-                               naa_aexonly=True)
+    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('AexAem'),
+                                naa_aexonly=True)
     b2 = naa_aexonly
     assert (b1 == b2).all()
 
@@ -273,7 +305,7 @@ def test_burst_size_pax():
 
     # Test all-ph size with all corrections
     b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('all'),
-                               na_comp=True, naa_comp=True, naa_aexonly=True)
+                                na_comp=True, naa_comp=True, naa_aexonly=True)
     b2 = (nd + na * (1 + aex_dex_ratio) + nda +
           naa_aexonly * (1 + aex_dex_ratio))
     assert np.allclose(b1, b2)
@@ -285,7 +317,7 @@ def test_burst_size_pax():
 
     # Test all-ph size with na_comp + naa_aexonly
     b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('all'), na_comp=True,
-                               naa_aexonly=True)
+                                naa_aexonly=True)
     b2 = (nd + na * (1 + aex_dex_ratio) + nda + naa_aexonly)
     assert np.allclose(b1, b2)
 
@@ -293,21 +325,21 @@ def test_burst_size_pax():
     gamma = 0.7
     beta = 0.85
     b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('all'),
-                               na_comp=True, naa_comp=True, naa_aexonly=True,
-                               gamma=gamma, beta=beta, donor_ref=True)
+                                na_comp=True, naa_comp=True, naa_aexonly=True,
+                                gamma=gamma, beta=beta, donor_ref=True)
     b2 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('all'),
-                               na_comp=True, naa_comp=True, naa_aexonly=True,
-                               gamma=gamma, beta=beta, donor_ref=False)
+                                na_comp=True, naa_comp=True, naa_aexonly=True,
+                                gamma=gamma, beta=beta, donor_ref=False)
     b3 = (gamma * (nd + nda) + na * (1 + aex_dex_ratio) +
           naa_aexonly * (1 + aex_dex_ratio) / beta)
     assert np.allclose(b1 * gamma, b2)
     assert np.allclose(b2, b3)
 
-    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel(Dex='DAem', Aex='Aem'),
-                               naa_aexonly=True,
-                               gamma=gamma, beta=beta, donor_ref=False)
+    b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('DexDAem_AexAem'),
+                                naa_aexonly=True,
+                                gamma=gamma, beta=beta, donor_ref=False)
     b2 = d.burst_sizes_ich(add_naa=True,
-                           gamma=gamma, beta=beta, donor_ref=False)
+                            gamma=gamma, beta=beta, donor_ref=False)
     assert np.allclose(b1, b2)
 
     d.leakage = 0.1
@@ -319,11 +351,11 @@ def test_burst_size_pax():
     gamma = 0.7
     beta = 0.85
     b1 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('all'),
-                               na_comp=True, naa_comp=True, naa_aexonly=True,
-                               gamma=gamma, beta=beta, donor_ref=True)
+                                na_comp=True, naa_comp=True, naa_aexonly=True,
+                                gamma=gamma, beta=beta, donor_ref=True)
     b2 = d.burst_sizes_pax_ich(ph_sel=Ph_sel('all'),
-                               na_comp=True, naa_comp=True, naa_aexonly=True,
-                               gamma=gamma, beta=beta, donor_ref=False)
+                                na_comp=True, naa_comp=True, naa_aexonly=True,
+                                gamma=gamma, beta=beta, donor_ref=False)
     b3 = (gamma * (nd + nda) + na * (1 + aex_dex_ratio) +
           naa_aexonly * (1 + aex_dex_ratio) / beta)
     assert np.allclose(b1 * gamma, b2)
@@ -343,16 +375,16 @@ def test_bg_calc(data):
     assert 'bg_th_us_user' not in data
 
     data.calc_bg(bg.exp_fit, time_s=30, tail_min_us='auto', F_bg=1.7,
-                 fit_allph=False)
+                  fit_allph=False)
     streams = [s for s in data.ph_streams if s != Ph_sel('all')]
     bg_t = [sum(data.bg[s][ich] for s in streams) for ich in range(data.nch)]
     assert list_array_equal(data.bg[Ph_sel('all')], bg_t)
 
 
 def test_ph_streams(data):
-    sel = [Ph_sel('all'), Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
+    sel = [Ph_sel('DexDem'), Ph_sel('DexAem')]
     if data.alternated:
-        sel.extend([Ph_sel(Aex='Aem'), Ph_sel(Aex='Dem')])
+        sel.extend([Ph_sel('AexAem'), Ph_sel('AexDem')])
     for s in sel:
         assert s in data.ph_streams
 
@@ -367,84 +399,39 @@ def test_bg_from(data):
 
     if not (data.alternated):
         assert list_array_equal(d.bg_from(Ph_sel('all')),
-                                d.bg_from(Ph_sel(Dex='DAem')))
+                                d.bg_from(Ph_sel('DexDAem')))
         return
 
-    bg_dd = d.bg_from(ph_sel=Ph_sel(Dex='Dem'))
-    bg_ad = d.bg_from(ph_sel=Ph_sel(Dex='Aem'))
+    bg_dd = d.bg_from(ph_sel=Ph_sel('DexDem'))
+    bg_ad = d.bg_from(ph_sel=Ph_sel('DexAem'))
 
-    bg = d.bg_from(ph_sel=Ph_sel(Dex='DAem'))
+    bg = d.bg_from(ph_sel=Ph_sel('DexDAem'))
     assert list_array_equal(bg, [b1 + b2 for b1, b2 in zip(bg_dd, bg_ad)])
 
-    bg_aa = d.bg_from(ph_sel=Ph_sel(Aex='Aem'))
-    bg_da = d.bg_from(ph_sel=Ph_sel(Aex='Dem'))
+    bg_aa = d.bg_from(ph_sel=Ph_sel('AexAem'))
+    bg_da = d.bg_from(ph_sel=Ph_sel('AexDem'))
 
-    bg = d.bg_from(ph_sel=Ph_sel(Aex='DAem'))
+    bg = d.bg_from(ph_sel=Ph_sel('AexDAem'))
     assert list_array_equal(bg, [b1 + b2 for b1, b2 in zip(bg_aa, bg_da)])
 
-    bg = d.bg_from(ph_sel=Ph_sel(Dex='Dem', Aex='Dem'))
+    bg = d.bg_from(ph_sel=Ph_sel('DAexDem'))
     assert list_array_equal(bg, [b1 + b2 for b1, b2 in zip(bg_dd, bg_da)])
 
-    bg = d.bg_from(ph_sel=Ph_sel(Dex='Aem', Aex='Aem'))
+    bg = d.bg_from(ph_sel=Ph_sel('DAexAem'))
     assert list_array_equal(bg, [b1 + b2 for b1, b2 in zip(bg_ad, bg_aa)])
 
-    bg = d.bg_from(ph_sel=Ph_sel(Dex='DAem'))
+    bg = d.bg_from(ph_sel=Ph_sel('DexDAem'))
     assert list_array_equal(bg, [b1 + b2 for b1, b2 in zip(bg_dd, bg_ad)])
 
-    bg = d.bg_from(ph_sel=Ph_sel(Dex='DAem', Aex='Aem'))
+    bg = d.bg_from(ph_sel=Ph_sel('DexDAem_AexAem'))
     bg2 = [b1 + b2 + b3 for b1, b2, b3 in zip(bg_dd, bg_ad, bg_aa)]
     assert list_array_equal(bg, bg2)
-
-
-def test_iter_ph_times(data):
-    """Test method .iter_ph_times() for all the ph_sel combinations.
-    """
-    # TODO add all the ph_sel combinations like in test_bg_from()
-    d = data
-
-    assert list_array_equal(d.ph_times_m, d.iter_ph_times())
-
-    for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Dex='Dem'))):
-        if d.alternated:
-            assert (ph == d.ph_times_m[ich][d.D_em[ich] * d.D_ex[ich]]).all()
-        else:
-            assert (ph == d.ph_times_m[ich][~d.A_em[ich]]).all()
-
-    for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Dex='Aem'))):
-        if d.alternated:
-            assert (ph == d.ph_times_m[ich][d.A_em[ich] * d.D_ex[ich]]).all()
-        else:
-            assert (ph == d.ph_times_m[ich][d.A_em[ich]]).all()
-
-    if d.alternated:
-        for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Aex='Dem'))):
-            assert (ph == d.ph_times_m[ich][d.D_em[ich] * d.A_ex[ich]]).all()
-        for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Aex='Aem'))):
-            assert (ph == d.ph_times_m[ich][d.A_em[ich] * d.A_ex[ich]]).all()
-
-        for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Dex='DAem'))):
-            assert (ph == d.ph_times_m[ich][d.D_ex[ich]]).all()
-        for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Aex='DAem'))):
-            assert (ph == d.ph_times_m[ich][d.A_ex[ich]]).all()
-
-        for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Dex='Dem', Aex='Dem'))):
-            assert (ph == d.ph_times_m[ich][d.D_em[ich]]).all()
-        for ich, ph in enumerate(d.iter_ph_times(Ph_sel(Dex='Aem', Aex='Aem'))):
-            assert (ph == d.ph_times_m[ich][d.A_em[ich]]).all()
-
-        for ich, ph in enumerate(d.iter_ph_times(
-                Ph_sel(Dex='DAem', Aex='Aem'))):
-            mask = d.D_ex[ich] + d.A_em[ich] * d.A_ex[ich]
-            assert (ph == d.ph_times_m[ich][mask]).all()
-    else:
-        assert list_array_equal(d.iter_ph_times(),
-                                d.iter_ph_times(Ph_sel(Dex='DAem')))
 
 
 def test_get_ph_times_period(data):
     for ich in range(data.nch):
         data.get_ph_times_period(0, ich=ich)
-        data.get_ph_times_period(0, ich=ich, ph_sel=Ph_sel(Dex='Dem'))
+        data.get_ph_times_period(0, ich=ich, ph_sel=Ph_sel('DexDem'))
 
 
 def test_iter_ph_times_period(data):
@@ -454,7 +441,7 @@ def test_iter_ph_times_period(data):
             istart, iend = d.Lim[ich][period]
             assert (ph_period == d.ph_times_m[ich][istart : iend + 1]).all()
 
-        ph_sel = Ph_sel(Dex='Dem')
+        ph_sel = Ph_sel('DexDem')
         mask = d.get_ph_mask(ich=ich, ph_sel=ph_sel)
         for period, ph_period in enumerate(
                 d.iter_ph_times_period(ich=ich, ph_sel=ph_sel)):
@@ -493,6 +480,52 @@ def test_burst_search_constant_rates(data):
     assert (data.num_bursts > 0).all()
     assert np.all(num_bursts1 == data.num_bursts)
     assert mburst1 == data.mburst
+    
+    
+def test_iter_ph_times(data):
+    """Test method .iter_ph_times() for all the ph_sel combinations.
+    """
+    # TODO add all the ph_sel combinations like in test_bg_from()
+    d = data
+
+    assert list_array_equal(d.ph_times_m, d.iter_ph_times())
+
+    for ich, ph in enumerate(d.iter_ph_times(Ph_sel('DexDem'))):
+        if d.alternated:
+            assert (ph == d.ph_times_m[ich][d.D_em[ich] * d.D_ex[ich]]).all()
+        else:
+            assert (ph == d.ph_times_m[ich][~d.A_em[ich]]).all()
+
+    for ich, ph in enumerate(d.iter_ph_times(Ph_sel('DexAem'))):
+        if d.alternated:
+            assert (ph == d.ph_times_m[ich][d.A_em[ich] * d.D_ex[ich]]).all()
+        else:
+            assert (ph == d.ph_times_m[ich][d.A_em[ich]]).all()
+
+    if d.alternated:
+        for ich, ph in enumerate(d.iter_ph_times(Ph_sel('AexDem'))):
+            assert (ph == d.ph_times_m[ich][d.D_em[ich] * d.A_ex[ich]]).all()
+        for ich, ph in enumerate(d.iter_ph_times(Ph_sel('AexAem'))):
+            assert (ph == d.ph_times_m[ich][d.A_em[ich] * d.A_ex[ich]]).all()
+
+        for ich, ph in enumerate(d.iter_ph_times(Ph_sel('DexDAem'))):
+            assert (ph == d.ph_times_m[ich][d.D_ex[ich]]).all()
+        for ich, ph in enumerate(d.iter_ph_times(Ph_sel('AexDAem'))):
+            assert (ph == d.ph_times_m[ich][d.A_ex[ich]]).all()
+
+        for ich, ph in enumerate(d.iter_ph_times(Ph_sel('DAexDem'))):
+            assert (ph == d.ph_times_m[ich][d.D_em[ich]]).all()
+        for ich, ph in enumerate(d.iter_ph_times(Ph_sel('DAexAem'))):
+            assert (ph == d.ph_times_m[ich][d.A_em[ich]]).all()
+
+        for ich, ph in enumerate(d.iter_ph_times(
+                Ph_sel('DexDAem_AexAem'))):
+            mask = d.D_ex[ich] + d.A_em[ich] * d.A_ex[ich]
+            assert (ph == d.ph_times_m[ich][mask]).all()
+    else:
+        assert list_array_equal(d.iter_ph_times(),
+                                d.iter_ph_times(Ph_sel('DexDAem')))
+
 
 
 def test_burst_search_L(data):
@@ -518,12 +551,12 @@ def test_burst_search_with_no_bursts(data):
 if has_matplotlib:
     def test_stale_fitter_after_burst_search(data):
         """Test that E/S_fitter attributes are deleted on burst search."""
-        data.burst_search(L=10, m=10, F=7, ph_sel=Ph_sel(Dex='Dem'))
+        data.burst_search(L=10, m=10, F=7, ph_sel=Ph_sel('DexDem'))
         bplt.dplot(data, bplt.hist_fret)  # create E_fitter attribute
         if data.alternated:
             bplt.dplot(data, bplt.hist_S)  # create S_fitter attribute
 
-        data.burst_search(L=10, m=10, F=7, ph_sel=Ph_sel(Dex='Aem'))
+        data.burst_search(L=10, m=10, F=7, ph_sel=Ph_sel('DexAem'))
         assert not hasattr(data, 'E_fitter')
         if data.alternated:
             assert not hasattr(data, 'S_fitter')
@@ -540,19 +573,47 @@ if has_matplotlib:
 
 def test_burst_search(data):
     """Smoke test and bg_bs check."""
-    streams = [Ph_sel(Dex='Dem'), Ph_sel(Dex='Aem')]
+    streams = [Ph_sel('DexDem'), Ph_sel('DexAem')]
     if data.alternated:
-        streams.extend([Ph_sel(Dex='Aem', Aex='Aem'), Ph_sel(Dex='DAem')])
+        streams.extend([Ph_sel('DAexAem'), Ph_sel('DexDAem')])
     for sel in streams:
         data.burst_search(L=10, m=10, F=7, ph_sel=sel)
         assert list_equal(data.bg_bs, data.bg_from(sel))
 
     if data.alternated:
         if data.lifetime:
-            data.burst_search(m=10, F=7, ph_sel=Ph_sel(Dex='DAem'), compact=False)
+            data.burst_search(m=10, F=7, ph_sel=Ph_sel('DexDAem'), compact=False)
         else:
-            data.burst_search(m=10, F=7, ph_sel=Ph_sel(Dex='DAem'), compact=True)
+            data.burst_search(m=10, F=7, ph_sel=Ph_sel('DexDAem'), compact=True)
     data.burst_search(L=10, m=10, F=7)
+
+
+def test_burst_search_and_gate(data_1ch):
+    """Test consistency of burst search and gate."""
+    d = data_1ch
+    assert d.alternated
+
+    # Smoke tests
+    bext.burst_search_and_gate(d, F=(6, 8))
+    bext.burst_search_and_gate(d, m=(12, 8))
+    bext.burst_search_and_gate(d, min_rate_cps=(60e3, 40e3))
+    if d.nch > 1:
+        mr1 = 35e3 + np.arange(d.nch) * 1e3
+        mr2 = 30e3 + np.arange(d.nch) * 1e3
+        bext.burst_search_and_gate(d, min_rate_cps=(mr1, mr2))
+
+    # Consistency test
+    d_dex = d.copy()
+    d_dex.burst_search(ph_sel=Ph_sel('DexDAem'))
+    d_aex = d.copy()
+    d_aex.burst_search(ph_sel=Ph_sel('AexAem'))
+    d_and = bext.burst_search_and_gate(d)
+    for bursts_dex, bursts_aex, bursts_and, ph in zip(
+            d_dex.mburst, d_aex.mburst, d_and.mburst, d.iter_ph_times()):
+        ph_b_mask_dex = bl.ph_in_bursts_mask(ph.size, bursts_dex)
+        ph_b_mask_aex = bl.ph_in_bursts_mask(ph.size, bursts_aex)
+        ph_b_mask_and = bl.ph_in_bursts_mask(ph.size, bursts_and)
+        assert (ph_b_mask_and == ph_b_mask_dex * ph_b_mask_aex).all()
 
 
 def test_mch_count_ph_num_py_c(data):
@@ -709,12 +770,12 @@ def test_burst_recompute_times(data):
     for times, bursts in zip(d.ph_times_m, d.mburst):
         newbursts = bursts.recompute_times(times)
         assert newbursts == bursts
-
+    
 
 def test_burst_recompute_index(data):
     """Test Bursts.recompute_index_* methods."""
     d = data
-    ph_sel = Ph_sel(Dex='Dem')
+    ph_sel = Ph_sel('DexDem')
     d.burst_search(ph_sel=ph_sel, index_allph=True)
     d_sel = d.copy()
     d_sel.burst_search(ph_sel=ph_sel, index_allph=False)
@@ -747,30 +808,30 @@ def test_burst_recompute_index(data):
         assert (times_allph[bursts_allph3.istart] == bursts_allph3.start).all()
         assert (times_allph[bursts_allph3.istop] == bursts_allph3.stop).all()
 
-## This test is only used to develop alternative implementations of
-## Bursts.recompute_index_reduce() and is normally disabled as it is very slow.
-#def test_burst_recompute_index_reduce(data):
-#    """Test different versions of Bursts.recompute_index_reduce methods.
-#
-#    This test is very slow so it's normally disabled.
-#    """
-#    d = data
-#    ph_sel = Ph_sel(Dex='Aem')
-#    d.burst_search(ph_sel=ph_sel)
-#    d_sel = d.copy()
-#    d_sel.burst_search(ph_sel=ph_sel, index_allph=False)
-#    for times_sel, bursts_sel, times_allph, bursts_allph in zip(
-#            d.iter_ph_times(ph_sel=ph_sel),
-#            d_sel.mburst,
-#            d.iter_ph_times(),
-#            d.mburst):
-#        assert (times_allph[bursts_allph.istart] == bursts_allph.start).all()
-#        assert (times_allph[bursts_allph.istop] == bursts_allph.stop).all()
-#
-#        bursts_sel1 = bursts_allph.recompute_index_reduce(times_sel)
-#        bursts_sel2 = bursts_allph.recompute_index_reduce2(times_sel)
-#        assert  bursts_sel1 == bursts_sel2
-#        assert  bursts_sel == bursts_sel1
+# This test is only used to develop alternative implementations of
+# Bursts.recompute_index_reduce() and is normally disabled as it is very slow.
+# def test_burst_recompute_index_reduce(data):
+#     """Test different versions of Bursts.recompute_index_reduce methods.
+
+#     This test is very slow so it's normally disabled.
+#     """
+#     d = data
+#     ph_sel = Ph_sel(Dex='Aem')
+#     d.burst_search(ph_sel=ph_sel)
+#     d_sel = d.copy()
+#     d_sel.burst_search(ph_sel=ph_sel, index_allph=False)
+#     for times_sel, bursts_sel, times_allph, bursts_allph in zip(
+#             d.iter_ph_times(ph_sel=ph_sel),
+#             d_sel.mburst,
+#             d.iter_ph_times(),
+#             d.mburst):
+#         assert (times_allph[bursts_allph.istart] == bursts_allph.start).all()
+#         assert (times_allph[bursts_allph.istop] == bursts_allph.stop).all()
+
+#         bursts_sel1 = bursts_allph.recompute_index_reduce(times_sel)
+#         bursts_sel2 = bursts_allph.recompute_index_reduce2(times_sel)
+#         assert  bursts_sel1 == bursts_sel2
+#         assert  bursts_sel == bursts_sel1
 
 
 def test_phrates_mtuple(data):
@@ -836,7 +897,7 @@ def test_burst_ph_data_functions(data):
     """
     d = data
     for bursts, ph, mask in zip(d.mburst, d.iter_ph_times(),
-                                d.iter_ph_masks(Ph_sel(Dex='Dem'))):
+                                d.iter_ph_masks(Ph_sel('DexDem'))):
         bstart = bursts.start
         bend = bursts.stop
 
@@ -869,14 +930,14 @@ def test_burst_ph_data_functions(data):
                 if i < bistart.size-1 and bistart[i+1] > biend[i] + 1:
                     assert not bursts_mask[stop]
 
-
+# TODO: middle intermediate
 def test_ph_in_bursts_ich(data):
     """Tests the ph_in_bursts_ich method.
     """
     d = data
     for ich in range(d.nch):
         ph_in_bursts = d.ph_in_bursts_ich(ich)
-        ph_in_bursts_dd = d.ph_in_bursts_ich(ich, ph_sel=Ph_sel(Dex='Dem'))
+        ph_in_bursts_dd = d.ph_in_bursts_ich(ich, ph_sel=Ph_sel('DexDem'))
         assert ph_in_bursts_dd.size < ph_in_bursts.size
 
 
@@ -889,12 +950,12 @@ def test_burst_fuse(data):
         new_mburstd = bl.fuse_bursts_direct(bursts, ms=1)
         assert new_mbursti == new_mburstd
 
-
+# TODO: This test seems to re-assign the photon data, solved with copy(), but should figure out which operation causes the reassignment
 def test_burst_fuse_0ms(data):
     """Test that after fusing with ms=0 the sum of bursts sizes is that same
     as the number of ph in bursts (via burst selection).
     """
-    d = data
+    d = data.copy()
     if d.nch == 8:
         d.burst_search(L=10, m=10, F=7, computefret=False)
         d.mburst[1] = bl.bslib.Bursts.empty()  # Make one channel with no bursts
@@ -932,9 +993,17 @@ def test_calc_max_rate(data):
     data.calc_max_rate(m=10)
     if data.alternated:
         if data.lifetime:
-            data.calc_max_rate(m=10, ph_sel=Ph_sel(Dex='DAem'), compact=False)
+            data.burst_search(m=10, F=7, ph_sel=Ph_sel('DexDAem'), compact=False)
         else:
-            data.calc_max_rate(m=10, ph_sel=Ph_sel(Dex='DAem'), compact=True)
+            data.calc_max_rate(m=10, ph_sel=Ph_sel('DexDAem'), compact=True)
+
+
+def test_burst_data(data):
+    """Test for bext.burst_data()"""
+    bext.burst_data(data, include_bg=True, include_ph_index=True)
+    bext.burst_data(data, include_bg=False, include_ph_index=True)
+    bext.burst_data(data, include_bg=True, include_ph_index=False)
+    bext.burst_data(data, include_bg=False, include_ph_index=False)
 
 
 def test_print_burst_stats(data):
@@ -943,18 +1012,19 @@ def test_print_burst_stats(data):
 
 
 def test_expand(data):
-    """Test method `expand()` for `Data()`."""
+    """Test method `bg_expand()` for `Data()`."""
     d = data
     for ich, bursts in enumerate(d.mburst):
         if bursts.num_bursts == 0:
             continue  # if no bursts skip this ch
-        nd, na, bg_d, bg_a, width = d.expand(ich, width=True)
+        bg, width = d.bg_expand(ich, width=True)
+        scd = d.ph_streams_n_ph_dict
+        bg_d, bg_a = bg[scd[Ph_sel('DexDem')], :], bg[scd[Ph_sel('DexAem')], :]
         width2 = bursts.width * d.clk_p
         period = d.bp[ich]
-        bg_d2 = d.bg_from(Ph_sel(Dex='Dem'))[ich][period] * width2
-        bg_a2 = d.bg_from(Ph_sel(Dex='Aem'))[ich][period] * width2
+        bg_d2 = d.bg_from(Ph_sel('DexDem'))[ich][period] * width2
+        bg_a2 = d.bg_from(Ph_sel('DexAem'))[ich][period] * width2
         assert (width == width2).all()
-        assert (nd == d.nd[ich]).all() and (na == d.na[ich]).all()
         assert (bg_d == bg_d2).all() and (bg_a == bg_a2).all()
 
 
@@ -971,39 +1041,45 @@ def test_burst_data_ich(data):
         assert (burst_dict['i_start'] == bursts.istart).all()
         assert (burst_dict['i_stop'] == bursts.istop).all()
         assert (burst_dict['bg_period'] == d.bp[ich]).all()
-        nd, na, bg_d, bg_a, width = d.expand(ich, width=True)
+        bg, width = d.bg_expand(ich, width=True)
+        scd = d.ph_streams_n_ph_dict
+        bg_d, bg_a = bg[scd[Ph_sel('DexDem')], :], bg[scd[Ph_sel('DexAem')], :]
+        n_ph = d.n_ph[ich]
         width_ms = width * 1e3
         assert (width_ms == burst_dict['width_ms']).all()
-        assert (nd == burst_dict['nd']).all()
-        assert (na == burst_dict['na']).all()
+        assert (n_ph == burst_dict['n_ph']).all()
         assert (bg_d == burst_dict['bg_dd']).all()
-        assert (bg_a == burst_dict['bg_ad']).all()
+        assert (bg_a == burst_dict['bg_da']).all()
         if d.alternated:
             period = d.bp[ich]
-            bg_da = d.bg_from(Ph_sel(Aex='Dem'))[ich][period] * width
-            bg_aa = d.bg_from(Ph_sel(Aex='Aem'))[ich][period] * width
-            assert (bg_da == burst_dict['bg_da']).all()
+            bg_ad = d.bg_from(Ph_sel('AexDem'))[ich][period] * width
+            bg_aa = d.bg_from(Ph_sel('AexAem'))[ich][period] * width
+            assert (bg_ad == burst_dict['bg_ad']).all()
             assert (bg_aa == burst_dict['bg_aa']).all()
 
 
 def test_burst_corrections(data):
     """Test background and bleed-through corrections."""
     d = data
-    d.calc_ph_num(alex_all=True)
+    d.calc_ph_num()
     d.corrections()
     leakage = d.get_leakage_array()
 
     for ich, bursts in enumerate(d.mburst):
         if bursts.num_bursts == 0: continue  # if no bursts skip this ch
-        nd, na, bg_d, bg_a, width = d.expand(ich, width=True)
+        bg, width = d.bg_expand(ich, width=True)
+        scd = d.ph_streams_n_ph_dict
+        bg_d, bg_a = bg[scd[Ph_sel('DexDem')], :], bg[scd[Ph_sel('DexAem')], :]
+        nd = d.nd[ich]
+        na = d.na[ich]
         burst_size_raw = bursts.counts
 
         lk = leakage[ich]
         if d.alternated:
             nda, naa = d.nda[ich], d.naa[ich]
             period = d.bp[ich]
-            bg_da = d.bg_from(Ph_sel(Aex='Dem'))[ich][period]*width
-            bg_aa = d.bg_from(Ph_sel(Aex='Aem'))[ich][period]*width
+            bg_da = d.bg_from(Ph_sel('AexDem'))[ich][period]*width
+            bg_aa = d.bg_from(Ph_sel('AexAem'))[ich][period]*width
             burst_size_raw2 = (nd + na + bg_d + bg_a + lk*nd + nda + naa +
                                bg_da + bg_aa)
             assert np.allclose(burst_size_raw, burst_size_raw2)
@@ -1058,7 +1134,7 @@ def test_burst_size_da(data):
     """Test that nd + na with no corrections is equal to b_size(mburst).
     """
     d = data
-    d.calc_ph_num(alex_all=True)
+    d.calc_ph_num()
     if d.alternated:
         for mb, nd, na, naa, nda in zip(d.mburst, d.nd, d.na, d.naa, d.nda):
             tot_size = mb.counts
@@ -1074,6 +1150,7 @@ def test_burst_selection(data):
     """Smoke test for burst selection methods.
     """
     d = data
+    print([n_ph.shape for n_ph in d.n_ph])
     d.select_bursts(select_bursts.size, th1=20, th2=100, add_naa=True)
     d.select_bursts(select_bursts.size, th1=20, th2=100, gamma=0.5)
 
@@ -1112,7 +1189,7 @@ def test_burst_selection_ranges(data):
     """
     d = data
     d.burst_search()
-    d.calc_max_rate(m=10, ph_sel=Ph_sel(Dex='DAem'))
+    d.calc_max_rate(m=10, ph_sel=Ph_sel('DexDAem'))
 
     Range = namedtuple('Range', ['min', 'max', 'getter'])
 
@@ -1136,6 +1213,71 @@ def test_burst_selection_ranges(data):
             assert ((selected >= range_.min) * (selected <= range_.max)).all()
 
 
+def test_join_data(data):
+    """Smoke test for bext.join_data() function.
+    """
+    d = data
+    dj = bext.join_data([d, d.copy()])
+    assert (dj.num_bursts == 2 * d.num_bursts).all()
+    for bursts in dj.mburst:
+        assert (np.diff(bursts.start) > 0).all()
+
+@pytest.mark.parametrize('data_ch, process', 
+                         ((dat, proc) for dat, proc in product((load_dataset_1ch, 
+                                                                load_dataset_1ch_nsalex, 
+                                                                load_dataset_8ch), 
+                                                               (True, False)) if dat is not load_dataset_8ch or proc))
+def test_group_data_base(data_ch, process):
+    """Test grouping of data before and after burst analysis"""
+    if process:    
+        orig_d = data_ch()
+    else:
+        orig_d = data_ch(process=process)
+    n = orig_d.nch
+    d = bext.group_data([orig_d for _ in range(8)])
+    assert d.nch == n*8
+    for field in Data.ph_fields:
+        if hasattr(orig_d, field):
+            assert len(getattr(d, field)) == n*8
+    if process:
+        loader.alex_apply_period(d)
+    for field in Data.burst_fields:
+        if hasattr(d, field):
+            assert len(getattr(d, field)) == n*8
+
+@pytest.mark.parametrize('data_ch', (load_dataset_1ch, load_dataset_1ch_nsalex, load_dataset_8ch))
+def test_group_data_corrections(data_ch):
+    """Check that corrections/burst selections still work"""
+    orig_d = data_ch()
+    n = orig_d.nch
+    orig_d = orig_d.select_bursts(select_bursts.size, th1=30)
+    d = bext.group_data([orig_d for _ in range(8)])
+    for field in Data.ph_fields + Data.burst_fields:
+        if hasattr(orig_d, field):
+            assert len(getattr(d, field)) == n*8
+    orig_d.leakage = 0.1
+    orig_d.gamma = 1.1
+    if orig_d.alternated:
+        orig_d.dir_ex = 0.1
+        orig_d.beta = 0.9
+    d = bext.group_data([orig_d for _ in range(8)])
+    for field in Data.ph_fields + Data.burst_fields:
+        if hasattr(orig_d, field):
+            assert len(getattr(d, field)) == n*8
+
+def test_group_data_checks():
+    """Ensure checks in group_check() raise errors"""
+    d1 = load_dataset_1ch()
+    d1l = load_dataset_1ch()
+    d1l.leakage = 0.1
+    d1s = load_dataset_1ch()
+    d1s = d1s.select_bursts(select_bursts.size, th1=20)
+    d2 = load_dataset_1ch(process=False)
+    d3 = load_dataset_8ch()
+    for da, db in permutations((d1, d1l, d1s, d2, d3), 2):
+        with pytest.raises(RuntimeError):
+            bext.group_data([da, db])
+
 def test_collapse(data_8ch):
     """Test the .collapse() method that joins the ch.
     """
@@ -1154,7 +1296,9 @@ def test_collapse(data_8ch):
     for name in d.burst_fields:
         if name not in d or name == 'mburst':
             continue
-        newfield = np.hstack(d[name])[indexsort]
+        newfield = np.hstack(d[name])
+        idxsort = tuple(slice(None) if newfield.ndim - 1 != i else indexsort for i in range(newfield.ndim))
+        newfield = newfield[idxsort]
         assert np.allclose(dc1[name][0], newfield)
 
     dc2 = d.collapse(update_gamma=False)

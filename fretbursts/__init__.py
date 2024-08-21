@@ -100,7 +100,12 @@ __all_local_names = [
         "hist_mrates", "hist_burst_phrate", "hist_burst_delays",
         "scatter_width_size", "scatter_rate_da", "scatter_fret_size",
         "scatter_fret_nd_na", "scatter_fret_width", "scatter_da",
-        "scatter_naa_nt", "scatter_alex", "hexbin_alex",
+        "scatter_naa_nt", "scatter_alex", "hexbin_alex", 
+        "hexbin_Erd", "hexbin_Era", "hexbin_Eraa", "hexbin_Er",
+        "scatter_Erd", "scatter_Era", "scatter_Eraa", "scatter_Er",
+        "hist_rd", "hist_ra", "hist_raa", 
+        "hexbin_Srd", "hexbin_Sra", "hexbin_Sraa", "hexbin_Sr",
+        "scatter_Srd", "scatter_Sra", "scatter_Sraa", "scatter_Sr",
 
         # Wrapper functions that create a plot for each channel
         "dplot", "dplot_48ch", "dplot_8ch", "dplot_1ch",
@@ -152,7 +157,11 @@ if has_matplotlib and has_pandas and has_lmfit:
             hist_mrates, hist_burst_phrate, hist_burst_delays,
             scatter_width_size, scatter_rate_da, scatter_fret_size,
             scatter_fret_nd_na, scatter_fret_width, scatter_da,
-            scatter_naa_nt, scatter_alex, hexbin_alex,
+            scatter_naa_nt, scatter_alex, hexbin_alex, hexbin_Erd,
+            hexbin_Era, hexbin_Eraa, hexbin_Er, scatter_Erd, 
+            scatter_Era, scatter_Eraa, scatter_Er, hist_rd, hist_ra,
+            hist_raa, hexbin_Srd, hexbin_Sra, hexbin_Sraa, hexbin_Sr,
+            scatter_Srd, scatter_Sra, scatter_Sraa, scatter_Sr,
 
             # Wrapper functions that create a plot for each channel
             dplot, dplot_48ch, dplot_8ch, dplot_1ch,
@@ -186,8 +195,11 @@ def init_notebook(fs=13, seaborn_style='darkgrid',
         logger.addHandler(handler)
 
     if mpl_backend is not None:
-        ip = get_ipython()
-        ip.enable_matplotlib(mpl_backend)
+        try:
+            ip = get_ipython()
+            ip.enable_matplotlib(mpl_backend)
+        except:
+            warnings.war("No IPython available")
 
     import seaborn as sns
     if not apionly:

@@ -1,6 +1,7 @@
 """
 Cython version of functions to compute photon rates.
 """
+
 import numpy as np
 cimport numpy as np
 from libc.math cimport exp, fabs
