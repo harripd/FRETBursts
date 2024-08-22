@@ -1820,7 +1820,7 @@ class Data(DataContainer):
                              len(tail_min_us))
         th_us = {}
         for i, key in enumerate(self.ph_streams + [Ph_sel('all')]):
-            th_us[key] = np.ones(nperiods) * tail_min_us[i]
+            th_us[key] = [np.ones(nperiods[j]) * tail_min_us[i] for j in range(self.nch)]
         # Save the input used to generate Th_us
         self.add(bg_th_us_user=tail_min_us)
         return th_us
@@ -1916,15 +1916,15 @@ class Data(DataContainer):
             tail_min_us0 = 250
             self.add(bg_auto_th_us0=tail_min_us0, bg_auto_F_bg=F_bg)
             auto_th_kwargs = dict(clk_p=self.clk_p, tail_min_us=tail_min_us0)
-            th_us = {}
+            th_us = dict()
             for key in self.ph_streams + [Ph_sel('all')]:
-                th_us[key] = np.zeros(nperiods)
+                th_us[key] = [np.zeros(np) for np in nperiods]
         else:
             th_us = self._get_bg_th_arrays(tail_min_us, nperiods)
 
-        Lim, Ph_p = [], []
-        BG, BG_err = [], []
-        Th_us = []
+        Lim, Ph_p = list(), list()
+        BG, BG_err = list(), list()
+        Th_us = list()
         for ich, ph_ch in enumerate(self.iter_ph_times()):
             print(f"Channel {ich}")
             masks = {sel: self.get_ph_mask(ich, ph_sel=sel)
@@ -1933,9 +1933,9 @@ class Data(DataContainer):
             # Note: histogram bins are half-open, e.g. [a, b)
             bins = (np.arange(nperiods[ich]+1) * time_s + min(self[ph_field][ich])*self.clk_p) / self.clk_p
             counts, _ = np.histogram(ph_ch, bins=bins)
-            lim, ph_p = [], []
-            bg = {sel: np.zeros(nperiods) for sel in self.ph_streams + [Ph_sel('all')]}
-            bg_err = {sel: np.zeros(nperiods) for sel in self.ph_streams + [Ph_sel('all')]}
+            lim, ph_p = list(), list()
+            bg = {sel: np.zeros(nperiods[ich]) for sel in self.ph_streams + [Ph_sel('all')]}
+            bg_err = {sel: np.zeros(nperiods[ich]) for sel in self.ph_streams + [Ph_sel('all')]}
             if ph_ch.size == 0:
                 Lim.append(lim)
                 Ph_p.append(ph_p)
@@ -1956,7 +1956,7 @@ class Data(DataContainer):
                         _bg, _ = fun(ph_i, **auto_th_kwargs)
                         th_us[Ph_sel('all')][ip] = 1e6 * F_bg / _bg
                     bg[Ph_sel('all')][ip], bg_err[Ph_sel('all')][ip] = \
-                        fun(ph_i, tail_min_us=th_us[Ph_sel('all')][ip], **kwargs)
+                        fun(ph_i, tail_min_us=th_us[Ph_sel('all')][ich][ip], **kwargs)
 
                 for sel in self.ph_streams:
                     ph_i_sel = ph_i[masks[sel][i0:i1]]

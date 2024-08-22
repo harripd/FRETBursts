@@ -229,12 +229,12 @@ def _load_alex_periods_donor_acceptor(data, meas_specs,ich):
     # Used for both us- and ns-ALEX and PAX
         # Try to load alex period definitions
     alt_ON = []
-    for i in range(1,data.num_colors+1):
-        if 'alex_excitation_period%d' % i in meas_specs:
-            alt_ON.append(meas_specs['alex_excitation_period%d' % i].read())
-        else:
-            alt_ON.append([])
-
+    i = 1
+    while 'alex_excitation_period%d' % i in meas_specs:
+        alt_ON.append(meas_specs['alex_excitation_period%d' % i].read())
+        i += 1
+    if 'excitation_alternated' in data.setup:
+        if data.setup['excitation_alternated'].size != (i-1):
             # But if it fails it's OK, those fields are optional
             msg = f"""
             The current file lacks the alternation period definition for
@@ -482,6 +482,7 @@ def photon_hdf5(filename, ondisk=False, require_setup=True, validate=False, fix_
     finally:
         if not ondisk:
             h5file.close()
+    return d
 
 
 ##

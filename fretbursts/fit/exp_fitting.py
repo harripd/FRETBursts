@@ -72,12 +72,14 @@ def expon_fit(s, s_min=0, offset=0.5, calc_residuals=True):
         residuals x-axis array, sample size after threshold.
     """
     if s_min > 0: s = s[s >= s_min] - s_min
-    assert s.size > 10
+    
+    x_residuals, residuals = (None, None) if calc_residuals else (np.nan, np.nan)
+    if s.size <= 10:
+        return np.nan, x_residuals, residuals, s.size 
 
     # Maximum likelihood estimator of the waiting-time
     Lambda = 1./s.mean()
-
-    x_residuals, residuals = None, None
+    
     if calc_residuals:
         x_residuals, residuals = get_residuals(s, tau_fit=1./Lambda,
                                                offset=offset)
