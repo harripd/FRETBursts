@@ -110,16 +110,10 @@ def _get_measurement_specs(ph_data, setup):
     for i in range(num_spectral):
         alt_period[i] = True if 'alex_excitation_period%d' % (i+1) in meas_specs else False
     meas_dict['alt'] = alt_period
-    if alt_period.size ==1 and alt_period == np.array([False,True],dtype=bool):
-        meas_dict['PAX'] = True
+    meas_dict['PAX'] =  alt_period.size ==1 and alt_period == np.array([False,True],dtype=bool)
+    if meas_dict['PAX']:
         print("Warning, this verion of FRETBursts has not been tested with PAX measuremnts")
-    if setup.num_polarization_ch.read() == 2:
-        meas_dict['pol'] = True
-    elif setup.num_polarization_ch.read() == 1:
-        meas_dict['pol'] = False
-    else:
-        raise phc.hdf5.Invalid_PhotonHDF5(
-            f"The field /setup/num_polarization_ch indicates {num_polarization_ch} channels, maxiumum of 2 allowed")
+    meas_dict['pol'] =  setup.num_polarization_ch.read() > 1
     meas_dict['lifetime'] = True if setup.lifetime.read() else False
     # Check consistency of polarization specs
     if meas_specs is not None:
