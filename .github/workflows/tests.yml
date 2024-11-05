@@ -40,7 +40,7 @@ jobs:
       - name: Install Dependencies
         shell: bash -l {0}
         run: |
-          conda install cython numpy numba nbconvert pytest jupyter scipy pandas matplotlib pytables phconvert lmfit pybroom seaborn setuptools build pyqt
+          conda install cython numpy numba nbconvert pytest jupyter scipy pandas matplotlib pytables phconvert lmfit pybroom seaborn setuptools pyqt
       - name: Install project
         shell: bash -l {0}
         run: |
