@@ -31,7 +31,6 @@ requires-python = ">= 3.7"
 dependencies = [
     "importlib_metadata;python_version<='3.9'",
     "numpy>=1.19", 
-    "matplotlib>=3.0.1", 
     "scipy>=1.2", 
     "pandas >= 0.23",
     "seaborn>=0.11.1",
@@ -58,6 +57,5 @@ fretbursts = ["phtools/*.pyx", ]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
-write_to = "fretbursts/_version.py"
 
 [tool.pytest.ini_options]

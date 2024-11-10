@@ -4,12 +4,21 @@
 # Copyright (C) 2014-2016 The Regents of the University of California,
 #               Antonino Ingargiola <tritemio@gmail.com>
 #
+from sys import version_info as python_version
+if python_version.major > 3 or python_version.minor > 7:
+    from importlib.metadata import version, PackageNotFoundError
+else:
+    from importlib_metadata import version, PackageNotFoundError
+try:
+    __version__ = version('fretbursts')
+except PackageNotFoundError:
+    print("Cannot find package version")
+del python_version, version, PackageNotFoundError
+import warnings
 
 ## Citation information
 
 
-from fretbursts._version import version as __version__
-import warnings
 
 _CITATION = """
    FRETBursts: An Open Source Toolkit for Analysis of Freely-Diffusing Single-Molecule FRET
@@ -80,7 +89,7 @@ __all__matplotlib = [
 __all_local_names = [
         # Local modules
         "loader", "select_bursts", "bl", "bg", "bpl", "bext", "bg_cache",
-        "hdf5", "fretmath", "mfit", "citation", "git",
+        "hdf5", "fretmath", "mfit", "citation",
 
         # Classes, functions, variables
         "Data", "Sel", "Ph_sel",
@@ -159,7 +168,6 @@ if has_matplotlib and has_pandas and has_lmfit:
             )
 
 from .utils.misc import download_file
-from .utils import git
 
 
 def init_notebook(fs=13, seaborn_style='darkgrid',

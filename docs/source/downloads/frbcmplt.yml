@@ -22,4 +22,5 @@ dependencies:
   - lmfit=1.2.2
   - phconvert=0.9.1
   - pybroom=0.2
+  - fretbursts=0.8.3
 

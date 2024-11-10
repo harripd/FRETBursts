@@ -5,15 +5,19 @@ channels:
 - default
 
 dependencies:
-- python=3.8
+- python=3.9
+- pip
 - setuptools
-- matplotlib
 - cython
+- numpy
+- matplotlib
 - pytables
-- lmfit
-- mock
 - pandas
-- phconvert
+- seaborn
 - pip:
-  - seaborn
+  - mock
+  - lmfit
+  - lmfit
+  - phconvert
+  - sphinx
   - sphinx_bootstrap_theme
