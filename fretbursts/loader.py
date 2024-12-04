@@ -30,6 +30,8 @@ import phconvert as phc
 import logging
 log = logging.getLogger(__name__)
 
+import re
+mask_rgx = re.compile(r'non_photon_id([1-9]\d*)')
 
 def _is_multich(h5data):
     if 'photon_data' in h5data:
@@ -246,8 +248,6 @@ def _compute_acceptor_emission_mask(data, ich, ondisk):
         _append_data_ch(data, 'A_em',
                         selection_mask(det_ich, accept))
 
-import re
-mask_rgx = re.compile(r'markers([1-0]\d*)')
 
 def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     data.add(nch=nch)
@@ -265,7 +265,7 @@ def _photon_hdf5_1ch(h5data, data, ondisk=False, nch=1, ich=0, loadspecs=True):
     # Set some `data` flags
     data.add(meas_type=meas_type)
     data.add(ALEX='ALEX' in meas_type)  # True for usALEX, nsALEX and PAX
-    data.add(alternated='alex_excitation_period1' in ph_data)
+    data.add(alternated='alex_excitation_period1' in meas_specs)
     data.add(lifetime='nanotimes' in ph_data)
     data.add(polarization='polarization_ch1' in det_specs and 'polarization_ch2' in det_specs)
     data.add(spectral='smFRET-1color' not in meas_type)
