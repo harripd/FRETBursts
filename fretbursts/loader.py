@@ -622,12 +622,12 @@ def _apply_period_1ch(d, ph_times_t, det_t, valid_mask, ex_period,ich=0):
     # check that spectral, poliarization and split specs match the actual indexes in the detectors array
     if det_union.size < unique_det.size:
         raise ValueError("Undefined detectors in HDF5 file")
-    elif np.any(det_union != unique_det):
+    elif any(i not in det_union for i in unique_det):
         raise ValueError("Undefined detectors in HDF5 file")
     # generate new mapings for reduced detector numbers
-    spec_map = _reallocate_det_maps(spec_map, unique_det)
-    pol_map = _reallocate_det_maps(pol_map, unique_det)
-    split_map = _reallocate_det_maps(split_map, unique_det)
+    spec_map = _reallocate_det_maps(spec_map, det_union)
+    pol_map = _reallocate_det_maps(pol_map, det_union)
+    split_map = _reallocate_det_maps(split_map, det_union)
     # identify all channels in the new mapping (note, this could be just np.arange(0,det_union.size,dtype=np.uint8))
     all_streams = _union_of_list(spec_map) if spec_map is not None else np.empty(0,dtype=np.uint8)
     all_streams = np.union1d(all_streams,_union_of_list(pol_map)) if pol_map is not None else all_streams
