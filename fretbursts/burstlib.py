@@ -483,15 +483,22 @@ class DataContainer(dict):
     """
     def __init__(self, **kwargs):
         dict.__init__(self, **kwargs)
-        for k in self:
-            dict.__setattr__(self, k, self[k])
+    
+    def __getattr__(self, attr):
+        if attr not in self:
+            raise AttributeError(f"Attribute {attr} has not been set in {type(self).__name__}")
+        return self[attr]
 
+    def __setattr__(self, attr, value):
+        if hasattr(self, attr) and attr not in self:
+            super().__setattr__(attr, value)
+        else:
+            self[attr] = value
+        
     def add(self, **kwargs):
         """Adds or updates elements (attributes and/or dict entries). """
         self.update(**kwargs)
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
+    
     def delete(self, *args, **kwargs):
         """Delete an element (attribute and/or dict entry). """
         warning = kwargs.get('warning', True)
@@ -501,11 +508,6 @@ class DataContainer(dict):
             except KeyError:
                 if warning:
                     print(' WARNING: Name %s not found (dict).' % name)
-            try:
-                delattr(self, name)
-            except AttributeError:
-                if warning:
-                    print(' WARNING: Name %s not found (attr).' % name)
 
 
 class Data(DataContainer):

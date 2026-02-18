@@ -43,100 +43,24 @@ if has_matplotlib:
     import fretbursts.burst_plot as bplt
 
 
-# data subdir in the notebook folder
-DATASETS_DIR = u'../notebooks/data/'
-
-
 def _alex_process(d):
     loader.alex_apply_period(d)
     d.calc_bg(bg.exp_fit, time_s=30, tail_min_us=300)
     d.burst_search(L=10, m=10, F=7)
 
-def load_dataset_1ch(process=True):
-    fn = "0023uLRpitc_NTP_20dT_0.5GndCl.hdf5"
-    fname = DATASETS_DIR + fn
+def load_dataset_1ch(fname, process=True):
     d = loader.photon_hdf5(fname)
     if process:
         _alex_process(d)
     return d
 
-def load_dataset_1ch_nsalex(process=True):
-    # fn = "dsdna_d7_d17_50_50_1.hdf5"
-    fn = 'HP3_TE150_SPC630.hdf5'
-    fname = DATASETS_DIR + fn
-    d = loader.photon_hdf5(fname)
-    if process:
-        _alex_process(d)
-    return d
 
-def load_dataset_8ch():
-    fn = "12d_New_30p_320mW_steer_3.hdf5"
-    fname = DATASETS_DIR + fn
-    d = loader.photon_hdf5(fname)
-    d.calc_bg(bg.exp_fit, time_s=30, tail_min_us=300)
-    d.burst_search(L=10, m=10, F=7)
-    return d
-
-def load_fake_pax():
-    fn = "0023uLRpitc_NTP_20dT_0.5GndCl.hdf5"
-    fname = DATASETS_DIR + fn
+def load_fake_pax(fname):
     d = loader.photon_hdf5(fname)
     d.add(ALEX=False, meas_type='PAX')
     loader.alex_apply_period(d)
     d.calc_bg(bg.exp_fit, time_s=30, tail_min_us='auto')
     d.burst_search(L=10, m=10, F=6, pax=True)
-    return d
-
-def load_dataset_grouped(process=True):
-    fn = ['HP3_TE150_SPC630.hdf5', 'HP3_TE200_SPC630.hdf5', 'HP3_TE250_SPC630.hdf5', 'HP3_TE300_SPC630.hdf5']
-    fn = [DATASETS_DIR + f for f in fn]
-    d = loader.photon_hdf5(fn)
-    if process:
-        _alex_process(d)
-    return d
-
-def normpdf(x, c=0, mu=0.5):
-    return np.exp(-(x-c)**2/((mu**2)*2))/(mu*np.sqrt(2*np.pi))
-
-@pytest.fixture(scope="module")
-def data_8ch(request):
-    d = load_dataset_8ch()
-    return d
-
-@pytest.fixture(scope="module")
-def data_1ch(request):
-    d = load_dataset_1ch()
-    return d
-
-@pytest.fixture(scope="module")
-def data_1ch_nsalex(request):
-    d = load_dataset_1ch_nsalex()
-    return d
-
-@pytest.fixture(scope="module")
-def data_grouped(request):
-    d = load_dataset_grouped()
-    return d
-
-
-@pytest.fixture(scope="module", params=[
-                                    load_dataset_1ch,
-                                    load_dataset_1ch_nsalex,
-                                    load_dataset_8ch,
-                                    load_dataset_grouped
-                                    ])
-def data(request):
-    load_func = request.param
-    d = load_func()
-    return d
-
-@pytest.fixture(scope="module", params=[
-                                    load_dataset_8ch,
-                                    load_dataset_grouped
-                                    ])
-def data_mch(request):
-    load_func = request.param
-    d = load_func()
     return d
 
 
@@ -163,8 +87,8 @@ def list_array_allclose(list1, list2):
 # Test functions
 #
 
-def test_bg_compatlayer_for_obsolete_attrs():
-    d = load_dataset_1ch(process=False)
+def test_bg_compatlayer_for_obsolete_attrs(dataset_1ch_file):
+    d = load_dataset_1ch(dataset_1ch_file, process=False)
     attrs = ('bg_dd', 'bg_ad', 'bg_da', 'bg_aa',
              'rate_m', 'rate_dd', 'rate_ad', 'rate_da', 'rate_aa')
     for attr in attrs:
@@ -200,9 +124,9 @@ def test_ph_times_compact(data_1ch):
     assert (hist_ac > 0).all()
 
 
-def test_time_min_max():
+def test_time_min_max(dataset_1ch_file):
     """Test time_min and time_max for ALEX data."""
-    d = load_dataset_1ch(process=False)
+    d = load_dataset_1ch(dataset_1ch_file, process=False)
     ich = 0
     assert d.time_max == d.ph_times_t[ich].max() * d.clk_p
     assert d.time_min == d.ph_times_t[ich].min() * d.clk_p
@@ -238,8 +162,8 @@ def test_aex_dex_ratio(data_1ch):
     assert (1 - aex_fraction) == 1 / (1 + aex_dex_ratio)
 
 
-def test_burst_size_pax():
-    d = load_fake_pax()
+def test_burst_size_pax(fake_pax_file):
+    d = load_fake_pax(fake_pax_file)
     aex_dex_ratio = d._aex_dex_ratio
     nd, na = d.nd[0], d.na[0]
     nda, naa = d.nda[0], d.naa[0]
@@ -1170,7 +1094,7 @@ def test_norm_pdf():
     x = np.arange(0, 1, 0.01)
     for c in np.arange(0.1, 1.0, 0.1):
         for mu in np.logspace(np.log(5e-2)/np.log(10), np.log(0.5)/np.log(10), 10):
-            assert np.allclose(normpdf(x, c, mu), norm.pdf(x, loc=c, scale=mu))
+            assert np.allclose(norm.pdf(x, c, mu), norm.pdf(x, loc=c, scale=mu))
 
 if __name__ == '__main__':
     pytest.main("-x -v tests/test_burstlib.py")
