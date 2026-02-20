@@ -1407,9 +1407,9 @@ class Data(DataContainer):
             dc._update_gamma(np.mean(self.get_gamma_array()))
         return dc
 
-    ##
-    # Utility methods
-    #
+    ###########################################################################
+    ### Utility methods
+    ###########################################################################
     def get_params(self):
         """Returns a plain dict containing only parameters and no arrays.
         This can be used as a summary of data analysis parameters.

@@ -1069,9 +1069,9 @@ def test_collapse(data_8ch):
     bursts2 = bl.bslib.Bursts.merge(d.mburst, sort=True)
     assert bursts1 == bursts2
     bursts2 = bl.bslib.Bursts.merge(d.mburst, sort=False)
-    indexsort_stop = bursts2.stop.argsort()
+    indexsort_stop = bursts2.stop.argsort(kind='stable')
     bursts3 = bursts2[indexsort_stop]
-    indexsort_start = bursts3.start.argsort()
+    indexsort_start = bursts3.start.argsort(kind='stable')
     bursts4 = bursts3[indexsort_start]
     assert bursts1 == bursts4
     indexsort = np.lexsort((bursts2.stop, bursts2.start))

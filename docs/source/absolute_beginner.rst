@@ -32,7 +32,7 @@ The installation should take a few seconds.
 If you notice any error please report it by opening a new issue on the
 `FRETBursts GitHub Issues <https://github.com/OpenSMFS/FRETBursts/issues>`_.
 
-Alternatively create an environment from one of our yaml files where we have verified compatibility of all versions of the software: :downlaod:`frbmin.yml <downloads/frbmin.yml>`
+Alternatively create an environment from one of our yaml files where we have verified compatibility of all versions of the software: :download:`frbmin.yml <downloads/frbmin.yml>`
 
 First download `frbmin.yml`
 
