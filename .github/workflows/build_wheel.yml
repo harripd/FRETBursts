@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.18.1
+        uses: pypa/cibuildwheel@v3.3.1
         env:
           CIBW_SKIP: "pp*"
           # CIBW_TEST_REQUIRES: pytest, numpy == 1.20.1, matplotlib, scipy, pandas, tables, numba, seaborn, lmfit, phconvert

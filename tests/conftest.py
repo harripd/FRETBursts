@@ -17,10 +17,10 @@ DATASETS_DIR = u'data/'
 if not os.path.exists(DATASETS_DIR):
     os.makedirs(DATASETS_DIR)
 
-alex1c = pooch.create(path=DATASETS_DIR, base_url='doi:10.6084/m9.figshare.1019906')
+alex1c = pooch.create(path=DATASETS_DIR, base_url='doi:10.6084/m9.figshare.1019906.v26')
 alex1c.load_registry_from_doi()
 
-phdf5 = pooch.create(path=DATASETS_DIR, base_url='doi:10.6084/m9.figshare.1456362')
+phdf5 = pooch.create(path=DATASETS_DIR, base_url='doi:10.6084/m9.figshare.1456362.v15')
 phdf5.load_registry_from_doi()
 
 mphmm = pooch.create(path=DATASETS_DIR, base_url='doi:10.5281/zenodo.5902313')
