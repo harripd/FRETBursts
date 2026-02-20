@@ -2951,9 +2951,10 @@ class Data(DataContainer):
     def name(self):
         """Measurement name: last subfolder + file name with no extension."""
         if not hasattr(self, '_name'):
-            basename = str(os.path.splitext(os.path.basename(self.fname))[0])
+            fname = self.fname if isinstance(self.fname, str) else self.fname[0]
+            basename = str(os.path.splitext(os.path.basename(fname))[0])
             name = basename
-            last_dir = str(os.path.basename(os.path.dirname(self.fname)))
+            last_dir = str(os.path.basename(os.path.dirname(fname)))
             if len(last_dir) > 0:
                 name = '_'.join([last_dir, basename])
             self.add(_name=name)
