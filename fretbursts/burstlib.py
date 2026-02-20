@@ -503,11 +503,16 @@ class DataContainer(dict):
         """Delete an element (attribute and/or dict entry). """
         warning = kwargs.get('warning', True)
         for name in args:
-            try:
+            if name in self:
                 self.pop(name)
-            except KeyError:
-                if warning:
-                    print(' WARNING: Name %s not found (dict).' % name)
+            elif warning:
+                print(' WARNING: Name %s not found (dict).' % name)
+    
+    def __delattr__(self, name):
+        if name in self:
+            self.pop(name, None)
+        else:
+            super().__delattr__(name)
 
 
 class Data(DataContainer):
@@ -1311,9 +1316,7 @@ class Data(DataContainer):
             if name in self:
                 self.delete(name)
         for name in ('E_fitter', 'S_fitter'):
-            if hasattr(self, name):
-                delattr(self, name)
-
+            self.pop(name, None)
     ##
     # Methods for high-level data transformation
     #
@@ -1348,8 +1351,7 @@ class Data(DataContainer):
 
         # Delete eventual cached properties
         for attr in ['_time_min', '_time_max']:
-            if hasattr(new_d, attr):
-                delattr(new_d, attr)
+            new_d.pop(attr, None)
         return new_d
 
     def collapse(self, update_gamma=True, skip_ch=None):
@@ -1688,11 +1690,9 @@ class Data(DataContainer):
         # Attributes specific of manual or 'auto' bg fit
         field_list = ['bg_auto_th_us0', 'bg_auto_F_bg', 'bg_th_us_user']
         for field in field_list:
-            if field in self:
-                self.delete(field)
-        if hasattr(self, '_bg_mean'):
-            delattr(self, '_bg_mean')
-
+            self.pop(field, None)
+        self.pop('_bg_mean', None)
+    
     def _get_num_periods(self, time_s):
         """Return the number of periods using `time_s` as period duration.
         """
