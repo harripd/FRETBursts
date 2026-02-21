@@ -4,6 +4,7 @@ on: [push, pull_request]
 jobs:
   download:
     runs-on: ubuntu-latest
+    python-version: "3.12"
     steps:
       - uses: actions/checkout@v6
       - uses: conda-incubator/setup-miniconda@v3
@@ -16,18 +17,19 @@ jobs:
         shell: bash -l {0}
         run: |
           conda install -c conda-forge pooch
+      - name: Download Files
+        run: |
+          cd tests
+          python -m fetch_files.py
       - uses: actions/cache@v5
         id: filecache
         with:
           path: tests/data
           enableCrossOsArchive: true
           key: testfiles
-      - name: Download Files
-        run: |
-          cd tests
-          python -m fetch_files.py
-      
+
   build:
+    needs: download
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
@@ -40,7 +42,6 @@ jobs:
           fetch-depth: 0
       - name: Restore Cached Files
         uses: actions/cache/restore@v5
-        id: filecache
         with:
           path: tests/data
           key: testfiles
@@ -76,3 +77,33 @@ jobs:
           cd ..
           cd tests
           python -m pytest
+
+  build_wheels:
+    needs: build
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/cache/restore@v5
+        with:
+          path: tests/data
+          enableCrossOsArchive: true
+          key: testfiles
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.3.1
+        env:
+          CIBW_SKIP: "pp* cp310-win_arm64"
+          CIBW_TEST_REQUIRES: pytest, numpy == 1.20.1, matplotlib, scipy, pandas, tables, numba, seaborn, lmfit, phconvert
+          CIBW_BEFORE_TEST: python -m pip install pytest
+          CIBW_TEST_COMMAND: python -m pytest {package}/tests
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
