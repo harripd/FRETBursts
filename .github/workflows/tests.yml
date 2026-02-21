@@ -100,11 +100,16 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/cache/restore@v5
+      - name: Restore Cached Files
+        id: cache-action
+        uses: actions/cache/restore@v5
         with:
-          path: ~/tests/data
-          enableCrossOsArchive: true
+          path: tests/data
           key: testfiles
+          enableCrossOsArchive: true
+      - name: Check Restore
+        shell: bash -l {0}
+        run: ls tests/data
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.1
         env:
