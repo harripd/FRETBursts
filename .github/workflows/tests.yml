@@ -20,7 +20,7 @@ jobs:
         shell: bash -l {0}
         run: |
           cd tests
-          python -m fetch_files.py
+          python fetch_files.py
       - uses: actions/cache@v5
         id: filecache
         with:
@@ -99,7 +99,7 @@ jobs:
         uses: pypa/cibuildwheel@v3.3.1
         env:
           CIBW_SKIP: "pp* cp310-win_arm64"
-          CIBW_TEST_REQUIRES: pytest, numpy == 1.20.1, matplotlib, scipy, pandas, tables, numba, seaborn, lmfit, phconvert
+          CIBW_TEST_REQUIRES: pytest, numpy, matplotlib, scipy, pandas, tables, numba, seaborn, lmfit, phconvert
           CIBW_BEFORE_TEST: python -m pip install pytest
           CIBW_TEST_COMMAND: python -m pytest {package}/tests
       
