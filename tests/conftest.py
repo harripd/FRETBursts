@@ -14,8 +14,6 @@ from fretbursts import loader, bg
 
 # data subdir in the notebook folder
 DATASETS_DIR = u'data/'
-if not os.path.exists(DATASETS_DIR):
-    os.makedirs(DATASETS_DIR)
 
 alex1c = pooch.create(path=DATASETS_DIR, base_url='doi:10.6084/m9.figshare.1019906.v26')
 alex1c.load_registry_from_doi()

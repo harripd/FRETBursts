@@ -2,6 +2,21 @@ name: Tests
 
 on: [push, pull_request]
 jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/cache@v5
+        id: filecache
+        with:
+          path: tests/data
+          enableCrossOsArchive: true
+          key: testfiles
+      - name: Download Files
+        run: |
+          cd tests
+          pythom -m fetch_files.py
+      
   build:
     runs-on: ${{matrix.os}}
     strategy:
@@ -13,6 +28,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Restore Cached Files
+        id: filecache
+        with:
+          path: tests/data
+          key: testfiles
+          enableCrossOsArchive: true
+        uses: actions/cache/restore@5
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
