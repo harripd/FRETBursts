@@ -30,6 +30,9 @@ jobs:
           path: ./tests/data
           enableCrossOsArchive: true
           key: testfiles
+      - name: Check Saved
+        shell: bash -l {0}
+        run: ls tests/data
   
   build:
     needs: download
@@ -52,7 +55,7 @@ jobs:
           enableCrossOsArchive: true
       - name: Check Restore
         shell: bash -l {0}
-        run: ls tests
+        run: ls tests/data
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
