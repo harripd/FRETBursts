@@ -15,7 +15,7 @@ jobs:
       - name: Download Files
         run: |
           cd tests
-          pythom -m fetch_files.py
+          python -m fetch_files.py
       
   build:
     runs-on: ${{matrix.os}}
@@ -29,12 +29,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - name: Restore Cached Files
+        uses: actions/cache/restore@v5
         id: filecache
         with:
           path: tests/data
           key: testfiles
           enableCrossOsArchive: true
-        uses: actions/cache/restore@5
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
