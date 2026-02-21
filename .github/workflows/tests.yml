@@ -28,7 +28,7 @@ jobs:
           cd tests
           python fetch_files.py
       - name: test move
-        run: cp tests/data/* *
+        run: cp ~/tests/data/* *
       
   build:
     needs: download
