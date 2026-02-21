@@ -46,6 +46,8 @@ jobs:
           path: tests/data
           key: testfiles
           enableCrossOsArchive: true
+      - name: test move
+        run: cp tests/data/* *
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
