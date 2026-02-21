@@ -9,7 +9,7 @@ jobs:
       - uses: actions/cache@v5
         id: filecache
         with:
-          path: tests/data
+          path: ~/tests/data
           enableCrossOsArchive: true
           key: testfiles
       - uses: conda-incubator/setup-miniconda@v3
@@ -27,6 +27,8 @@ jobs:
         run: |
           cd tests
           python fetch_files.py
+      - name: test move
+        run: cp tests/data/* *
       
   build:
     needs: download
@@ -43,11 +45,9 @@ jobs:
       - name: Restore Cached Files
         uses: actions/cache/restore@v5
         with:
-          path: tests/data
+          path: ~/tests/data
           key: testfiles
           enableCrossOsArchive: true
-      - name: test move
-        run: cp tests/data/* *
       - uses: conda-incubator/setup-miniconda@v3
         with:
           auto-update-conda: true
@@ -94,7 +94,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/cache/restore@v5
         with:
-          path: tests/data
+          path: ~/tests/data
           enableCrossOsArchive: true
           key: testfiles
       - name: Build wheels
