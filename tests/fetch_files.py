@@ -18,6 +18,7 @@ _ = alex1c.fetch("12d_New_30p_320mW_steer_3.hdf5")
 phdf5 = pooch.create(path=DATASETS_DIR, base_url='doi:10.6084/m9.figshare.1456362.v15')
 phdf5.load_registry_from_doi()
 _ = phdf5.fetch("0023uLRpitc_NTP_20dT_0.5GndCl.hdf5")
+_ = phdf5.fetch("dsdna_d7_d17_50_50_1.hdf5")
 
 mphmm = pooch.create(path=DATASETS_DIR, base_url='doi:10.5281/zenodo.5902313')
 mphmm.load_registry_from_doi()
